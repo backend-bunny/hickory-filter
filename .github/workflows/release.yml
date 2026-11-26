@@ -1,0 +1,137 @@
+name: release
+
+# Publish release vX.Y.Z: ghcr.io/backend-bunny/hickory-filter:X.Y.Z and
+# :sha-<short>, signed and attested keylessly, then the Helm chart
+# oci://ghcr.io/backend-bunny/charts/hickory-filter:X.Y.Z pinned to that
+# digest, also signed; the digests are appended to the GitHub Release.
+#
+# Called by release-please when its release PR is merged. Dispatch by hand
+# only to retry a failed release: it re-pushes the X.Y.Z tags, so do that only
+# when nothing was published.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag (vX.Y.Z)
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to (re)publish (vX.Y.Z)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # append digests to the GitHub Release
+      packages: write # push to GHCR
+      id-token: write # keyless cosign + provenance
+      attestations: write # GitHub artifact attestation
+    env:
+      IMAGE: ghcr.io/backend-bunny/hickory-filter
+      CHART: ghcr.io/backend-bunny/charts/hickory-filter
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-tools
+      - name: Tag matches the version
+        run: devbox run -- hack/check-version.sh "$TAG"
+      - name: Rust checks
+        run: devbox run -- hack/cargo-check.sh
+      - name: Licenses
+        run: devbox run -- cargo deny check licenses
+      - name: Chart checks
+        run: devbox run -- hack/chart-test.sh
+      - name: Build (melange + apko from the lockfile)
+        run: devbox run -- hack/build.sh
+      - name: Test the image
+        run: devbox run -- hack/test.sh
+
+      # Nothing above publishes: a failed check stops the release here.
+      - name: Log in to the registry
+        env:
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ github.token }}
+        run: |
+          printf '%s' "$TOKEN" | devbox run -- apko login ghcr.io --username "$ACTOR" --password-stdin
+          printf '%s' "$TOKEN" | devbox run -- cosign login ghcr.io --username "$ACTOR" --password-stdin
+          printf '%s' "$TOKEN" | devbox run -- helm registry login ghcr.io --username "$ACTOR" --password-stdin
+      - name: Publish the image
+        id: publish
+        run: |
+          devbox run -- hack/publish.sh
+          echo "digest=$(cat out/image.digest)" >> "$GITHUB_OUTPUT"
+
+      - name: Sign and attest (keyless cosign)
+        env:
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          devbox run -- cosign sign --yes "$IMAGE@$DIGEST"
+          devbox run -- cosign attest --yes --type spdxjson \
+            --predicate out/sbom-index.spdx.json "$IMAGE@$DIGEST"
+          # Licenses and notice files of the Rust crates in the binary.
+          devbox run -- cosign attest --yes \
+            --type https://github.com/backend-bunny/hickory-filter/notices/v1 \
+            --predicate out/notices.json "$IMAGE@$DIGEST"
+      - name: Attest the image's build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
+
+      - name: Publish and sign the Helm chart
+        id: chart
+        env:
+          IMAGE_DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          devbox run -- hack/chart-publish.sh
+          chart_digest=$(cat out/chart.digest)
+          devbox run -- cosign sign --yes "$CHART@$chart_digest"
+          echo "digest=$chart_digest" >> "$GITHUB_OUTPUT"
+      - name: Attest the chart's build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.CHART }}
+          subject-digest: ${{ steps.chart.outputs.digest }}
+          push-to-registry: true
+
+      - name: Add the digests and verification commands to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+          CHART_DIGEST: ${{ steps.chart.outputs.digest }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/notes.md"
+          cat >> "$RUNNER_TEMP/notes.md" <<EOF
+
+          ## Artifacts
+
+          | | Reference |
+          |---|---|
+          | Image | \`$IMAGE@$DIGEST\` |
+          | Helm chart | \`oci://$CHART\` \`${TAG#v}\` (\`@$CHART_DIGEST\`) |
+
+          \`\`\`sh
+          cosign verify $IMAGE@$DIGEST \\
+            --certificate-identity-regexp '^https://github.com/backend-bunny/hickory-filter/' \\
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          cosign verify $CHART@$CHART_DIGEST \\
+            --certificate-identity-regexp '^https://github.com/backend-bunny/hickory-filter/' \\
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          \`\`\`
+          EOF
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md"

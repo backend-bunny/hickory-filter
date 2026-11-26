@@ -1,5 +1,9 @@
-//! A small HTTP server on loopback for the list-fetching tests.
+//! A small HTTP server on loopback for the list-fetching tests, and helpers for
+//! driving the real binary.
 #![allow(dead_code)]
+
+pub mod dns;
+pub mod process;
 
 use std::{
     collections::HashMap,

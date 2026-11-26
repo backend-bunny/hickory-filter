@@ -222,6 +222,37 @@ a warning with `reason` on failure) and rule set replacements. `level` is
 `error`, `warn`, `info` (the default), `debug` or `trace`, and `format` is
 `text` (the default) or `json`.
 
+### Grafana dashboard
+
+`charts/hickory-filter/dashboards/hickory-filter.json` is a Grafana dashboard
+for the metrics and the query log above. It picks its datasources when it is
+opened (a **Metrics** variable for a Prometheus-compatible store and a **Logs**
+variable for Loki), so the same file works however it is loaded: imported by
+hand, or provisioned from a ConfigMap or an operator resource.
+
+- **Overview**, from the metrics only: queries and the share blocked, rules
+  loaded, rule set age, queries per second by outcome
+  (`hickory_filter_queries_total`), answer-time quantiles
+  (`hickory_filter_query_duration_seconds`), queries by type, upstream queries
+  and responses (`hickory_resolver_outgoing_queries_total`,
+  `hickory_resolver_name_server_query_responses_total`), the response cache hit
+  ratio (`hickory_resolver_cache_hit_total`, `hickory_resolver_cache_miss_total`),
+  rules by action and kind (`hickory_filter_rules`), and a table of lists with
+  each list's rules, skipped lines, time since its last successful load and last
+  refresh result (`hickory_filter_list_rules`, `hickory_filter_list_skipped_lines`,
+  `hickory_filter_list_last_success_timestamp_seconds`,
+  `hickory_filter_list_last_refresh_success`).
+- **Usage**, from the query log in Loki: the most requested blocked names, the
+  most requested permitted names, the busiest clients and the query rate per
+  client. These stay empty unless `log.query_log = true` with `format = "json"`
+  and the logs are collected into Loki. The **Log stream selector** variable
+  holds the labels that identify hickory-filter's log lines. The queries select
+  lines by the target `hickory_filter::query` and use only the documented
+  fields.
+
+A test fails if a panel queries a metric that isn't in the metrics reference or
+uses a log field that isn't in the query log fields.
+
 ## Memory and lookup cost (measured)
 
 Exact and wildcard names live in reversed-domain FSTs (finite-state

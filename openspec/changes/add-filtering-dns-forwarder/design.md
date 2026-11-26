@@ -37,13 +37,13 @@ See proposal.md for the motivation and specs/ for the required behaviour. Constr
 
 ### D2. Rule set: immutable, built whole, swapped atomically
 A `RuleSet` holds, separately for allow and block:
-- `exact: HashSet<Box<str>>` (domain and hosts rules),
-- `suffix: HashSet<Box<str>>` (wildcard base names),
+- `exact`: an `fst::Set` of names (domain and hosts rules), stored as reversed-label keys (D8),
+- `suffix`: an `fst::Set` of wildcard base names, same key form,
 - `regex: regex::RegexSet` (all regex rules compiled together).
 
-Matching normalises the qname once (lower case, no trailing dot) and checks allow first, then block: exact → suffix walk (the name, then each parent after a `.`) → regex set. The live set sits in an `ArcSwap<RuleSet>`. A refresh builds a new `RuleSet` from every list's current content (fresh or last good) plus the inline rules, then stores it.
+Matching normalises the qname once (lower case, no trailing dot) and checks allow first, then block: exact → suffix → regex set. Exact and suffix lookups are one pass over the automaton that reads the query's labels from the TLD down, checking at each label boundary whether a wildcard base ends there. The live set sits in an `ArcSwap<RuleSet>`. A refresh builds a new `RuleSet` from every list's current content (fresh or last good) plus the inline rules, then stores it.
 - *Why:* readers do one atomic load with no lock contention. Atomicity (blocklist-sources, Atomic rule updates) holds by construction. `RegexSet` checks all patterns in one linear-time pass, and the `regex` crate guarantees linear time, so no catastrophic backtracking.
-- *Alternatives:* an `RwLock` around mutable maps (readers block on writers during a big rebuild); hickory `LowerName` keys (≈ 80 bytes inline each, and compared label-wise, which we don't need); FST storage (smaller, see D8).
+- *Alternatives:* an `RwLock` around mutable maps (readers block on writers during a big rebuild); hickory `LowerName` keys (≈ 80 bytes inline each, and compared label-wise, which we don't need); hash sets (simpler and faster per lookup, but measured at about 85 bytes per name and a 2x refresh peak, see D8).
 - *Cost:* a rebuild briefly holds two rule sets in memory.
 
 ### D3. Lists keep their last good content independently
@@ -93,14 +93,20 @@ One parser per list type returns `Option<Rule>` per line, and the caller counts 
 ### D7. Observability: `metrics` + Prometheus exporter on a small HTTP server
 The `metrics` facade with `metrics-exporter-prometheus`. `/health`, `/ready` and `/metrics` are served by a minimal `hyper` service on its own listener. Readiness is an `AtomicBool`, set after the first rule set is stored and the listeners are bound. Logging uses `tracing` + `tracing-subscriber` (text or JSON, `RUST_LOG`-style level). List URLs are passed through a credential-stripping display helper before being logged or used as labels.
 
-### D8. Memory: hash sets now, FST later behind the same interface
-`RuleSet` matching sits behind a small internal trait (`contains_exact`, `matches_suffix`). (Implemented as `NameIndex` in `src/ruleset.rs`; queries are normalised leniently there, lower case and one trailing dot, without the rule parser's name validation, so unusual query names still match by case and never panic.) A later change can swap in reversed-domain FSTs without touching parsing, refresh or the handler. Benchmark first: build a 1M-name list, then measure RSS steady and during a swap.
+### D8. Memory: reversed-domain FSTs behind `NameIndex`
+Decision (maintainer, 2026-11-26): exact and wildcard names are stored in finite-state transducers (the `fst` crate), to shrink the footprint. Measured baseline with hash sets (task 4.3), for 1M exact names: 83 MiB resident (about 85 bytes per name), 176 MiB peak while a refresh holds old and new sets, and 142 MiB after the swap because millions of small freed allocations aren't returned to the OS.
+- *Keys:* a name's labels in reverse order, joined with `.` (`ads.example` becomes `example.ads`), so names under one suffix share a prefix. Keys are sorted, deduplicated and built into one `fst::Set` for exact names and one for wildcard bases, per side (allow, block).
+- *Lookup:* one walk over the automaton following the query's labels from the TLD down, with no allocation. At each label boundary, a final state in the wildcard set means a base ends there; at the end of the name, a final state in the exact set means an exact match. This replaces the label-by-label hash lookups with a single pass.
+- *Build:* collect the keys, sort, dedupe, build. The sort buffer is a transient cost during a refresh. The replacement is still built off the query path and swapped whole (D2), and the finished automaton is one contiguous buffer, so freeing the old one returns its memory.
+- *Interface:* `RuleSet` matching stays behind `NameIndex` (`contains_exact`, `matches_suffix`) in `src/ruleset.rs`, so parsing, refresh and the handler don't change. The hash-set implementation stays as a test oracle: a test checks that both give the same answers over generated and edge-case names. Queries are normalised leniently there, lower case and one trailing dot, without the rule parser's name validation, so unusual query names still match by case and never panic.
+- *Trade-offs accepted:* each lookup is slower than a hash lookup (expected a few hundred nanoseconds against about 61 ns, still far below a DNS round trip), a refresh pays a sort, `fst` is one more dependency (Unlicense OR MIT, which the allowlist covers via MIT), and the automaton is immutable, which we already rely on.
+- *Measurement caveat:* generated, highly regular names compress better than real lists, so the benchmark and the memory example move to a more varied name distribution (task 4.6), and the figures should be confirmed on a real merged list.
 
 ## Risks / Trade-offs
 
 - [`hickory-server` API changes between releases] → Pin exactly. Keep all hickory glue in one module. Upgrades are separate changes with the wire tests as the safety net.
 - [Request-level handler is impractical in the pinned release] → Spike first (task 1.2). The fallback is the `ZoneHandler` chain (D1 alternative), accepting whatever NXDOMAIN shape `Catalog` produces, documented.
-- [A rebuild doubles rule memory briefly] → Document it for sizing. Bounded fetch concurrency. FST later (D8).
+- [A rebuild doubles rule memory briefly] → Document it for sizing. Bounded fetch concurrency. FST storage (D8) lowers both the steady and the peak figure.
 - [Huge regex lists make `RegexSet` slow to compile or large] → Count regex rules in metrics, document that regex lists are the expensive kind, and consider a per-list cap if needed.
 - [List host resolution loops back to this server] → The bootstrap resolver is IP-only, and the system resolver is used only when none is set, with a documented warning that the system resolver must not point at hickory-filter itself.
 - [A malicious or broken list server (huge or endless body, redirect tricks)] → Timeout, size cap, redirect policy (D4). Content is parsed as untrusted text, and invalid lines are skipped.

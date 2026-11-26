@@ -21,7 +21,7 @@
 
 ## 4. License notices
 
-- [ ] 4.1 Add `deny.toml` with the license allowlist and a `cargo deny check licenses` step in CI; verify CI fails on a scratch dependency licensed GPL-3.0-only
+- [x] 4.1 Add `deny.toml` with the license allowlist and a `cargo deny check licenses` step in CI; verify CI fails on a scratch dependency licensed GPL-3.0-only
 - [ ] 4.2 Implement `hack/notices.py` per D5 (normal deps on the musl target, license and notice files from the vendored tree, pinned SPDX fallback texts, musl entry, reviewed-exception list) writing `notices.json` and `THIRD-PARTY-NOTICES.md`; verify unit tests for a crate with NOTICE, a crate with no file (canonical fallback), a build-only crate (excluded) and a crate with nothing (fails)
 - [ ] 4.3 Ship `THIRD-PARTY-NOTICES.md`, `LICENSE-MIT` and `LICENSE-APACHE` in `/usr/share/doc/hickory-filter/` via the melange source dir; verify a test comparing the crate set in the image's notices, `notices.json` and the binary's cargo-auditable data
 
@@ -37,7 +37,7 @@
 
 - [ ] 6.1 Implement `hack/check-version.sh [tag]` (tag = Cargo.toml = melange = Chart version/appVersion = `--version` output); verify it fails on each kind of mismatch
 - [ ] 6.2 Implement `hack/publish.sh` (`apko publish` with tags `X.Y.Z` and `sha-<short>`, resolve and write the index digest; `DRY_RUN=1` prints the tags); verify the dry run lists exactly those two tags
-- [ ] 6.3 Implement `hack/check-commits.sh` (PR title and every commit subject match `type(scope)!: subject`); verify it rejects "update stuff" and accepts `fix(deps): bump x`
+- [x] 6.3 Implement `hack/check-commits.sh` (PR title and every commit subject match `type(scope)!: subject`); verify it rejects "update stuff" and accepts `fix(deps): bump x`
 - [ ] 6.4 Write `ci.yml` per D8 (`contents: read` only; jobs `conventional-commits`, `rust`, `chart`, `image`, and `ci-ok` aggregating them; pinned-action check; self-contained-docs grep); verify a PR run passes, has no write or OIDC permission, and `ci-ok` fails when one job is made to fail
 - [ ] 6.5 Add `release-please-config.json`, `.release-please-manifest.json` and the `x-release-please-version` markers in `melange.yaml` and `Chart.yaml`, and write `release-please.yml` (opens the release PR, dispatches `ci.yml` on its branch, and on merge tags, creates the Release and calls `release.yml`); verify the first release PR bumps `Cargo.toml`, `Cargo.lock`, `melange.yaml` and the chart together and `hack/check-version.sh` passes on it
 - [ ] 6.6 Write `release.yml` per D4 (`workflow_call` and `workflow_dispatch` with a tag; sign the index, attest SBOM + notices + provenance, publish chart, sign + provenance for the chart, append digests and verify commands to the release notes) with permissions only on the publish job; verify with a first pre-release that `cosign verify`, `cosign verify-attestation --type spdxjson`, the notices type and the provenance verification all succeed for both digests, and that a hand-pushed tag publishes nothing

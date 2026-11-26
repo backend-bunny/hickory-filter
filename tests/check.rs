@@ -68,3 +68,21 @@ fn the_example_config_passes_check() {
     let output = check(&example);
     assert!(output.status.success(), "{output:?}");
 }
+
+#[test]
+fn check_rejects_an_invalid_rule_and_names_it() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let file = dir.path().join("rules.toml");
+    std::fs::write(
+        &file,
+        "upstreams = [\"192.0.2.53\"]\n[filter]\nrules = [\"block glob *.example\"]\n",
+    )
+    .expect("write");
+
+    let output = check(&file);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("rules.toml"), "{stderr}");
+    assert!(stderr.contains("block glob *.example"), "{stderr}");
+    assert!(stderr.contains("accepted types"), "{stderr}");
+}

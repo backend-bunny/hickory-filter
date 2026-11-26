@@ -17,7 +17,7 @@ if [ -d .github ]; then
     | grep -vE 'uses:\s*[A-Za-z0-9._/-]+@[0-9a-f]{40}(\s|$)' || true)
 fi
 
-# 2. Link hosts. Add a host here only when the repo depends on that service.
+# 2. Link hosts (the canonical license texts in hack/spdx-licenses/ are verbatim and not scanned). Add a host here only when the repo depends on that service.
 #    The Wolfi package repository is the runtime base distribution.
 #    The CRD schema catalog is where chart validation gets the schemas of the
 #    Prometheus Operator resources. Documentation address ranges and example names are fine in examples.
@@ -38,6 +38,6 @@ while IFS=: read -r file lineno url; do
   fi
 done < <(grep -rnoE 'https?://[^[:space:]"'"'"'`)>]+' \
   README.md AGENTS.md Taskfile.yml Cargo.toml openspec src tests hack 2>/dev/null \
-  | grep -v '^openspec/changes/archive/' || true)
+  | grep -vE '^(openspec/changes/archive/|hack/spdx-licenses/)' || true)
 
 exit "$fail"

@@ -42,6 +42,13 @@ for f in LICENSE-MIT LICENSE-APACHE; do
   docker cp "$cid:/usr/share/doc/hickory-filter/$f" "$work/$f" >/dev/null 2>&1 \
     && check "ships $f" ok || check "ships $f" missing
 done
+docker cp "$cid:/usr/share/doc/hickory-filter/THIRD-PARTY-NOTICES.md" "$work/THIRD-PARTY-NOTICES.md" >/dev/null 2>&1 \
+  && check "ships THIRD-PARTY-NOTICES.md" ok || check "ships THIRD-PARTY-NOTICES.md" missing
+if [ -f "$ROOT/out/notices.json" ] && [ -f "$work/THIRD-PARTY-NOTICES.md" ]; then
+  if python3 hack/notices.py check-image "$work/THIRD-PARTY-NOTICES.md" "$ROOT/out/notices.json" "$work/hf"; then
+    check "notices list the same crates as notices.json and the binary" ok
+  else check "notices list the same crates as notices.json and the binary" differ; fi
+else check "notices.json present" missing; fi
 docker rm "$cid" >/dev/null
 
 # a local upstream that answers every A query with 192.0.2.1

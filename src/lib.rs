@@ -11,3 +11,4 @@ pub mod lists;
 pub mod refresh;
 pub mod rules;
 pub mod ruleset;
+pub mod server;

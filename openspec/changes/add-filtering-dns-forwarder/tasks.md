@@ -43,8 +43,8 @@
 ## 7. Forwarding and server lifecycle
 
 - [x] 7.1 Configure the `ForwardZoneHandler` from `upstreams` with a bounded response cache, returning SERVFAIL when no upstream answers; verify wire-level tests for a forwarded answer, SERVFAIL with unreachable upstreams, and a newly blocked name that was cached
-- [ ] 7.2 Bind UDP and TCP listeners (default port 1053), failing startup with the address on a bind error; verify tests for the dns-forwarding "Listeners" scenarios
-- [ ] 7.3 Implement graceful shutdown on SIGTERM/SIGINT with a grace period; verify a test that the process exits 0 within the grace period
+- [x] 7.2 Bind UDP and TCP listeners (default port 1053), failing startup with the address on a bind error; verify tests for the dns-forwarding "Listeners" scenarios
+- [x] 7.3 Implement graceful shutdown on SIGTERM/SIGINT with a grace period; verify a test that the process exits 0 within the grace period
 
 ## 8. Observability
 

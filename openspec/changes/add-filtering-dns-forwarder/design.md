@@ -34,6 +34,7 @@ See proposal.md for the motivation and specs/ for the required behaviour. Constr
   - `Catalog` REFUSES a query without the RD flag, because the forwarder only serves recursive queries. Blocked names are answered whether or not RD is set, since the filter runs first. Whether the forwarded path should instead answer non-RD queries is a behaviour question for dns-forwarding, not a blocker.
   - The crate's minimum Rust version is 1.88, so the Alpine branch's Rust (packaging D1) must be at least that.
   - The crate also ships an optional built-in `blocklist` zone handler (feature `blocklist`). It isn't used: our rule types, list formats and atomic swap need the request-level hook anyway.
+- *Blocked response details (tasks 5.1, 5.2):* `src/blocked.rs` builds the answer as plain data from the mode (testable without a server), and `FilterHandler` sends it with the query's ID, question and RD flag echoed and the recursion-available flag set, as a recursive resolver would. Only `nxdomain` mode sets AA and carries an SOA: owned by the queried name, with the configured TTL as both record TTL and negative-caching minimum, `hostmaster.invalid.` as the mailbox and the queried name as the primary server. Other modes answer with no authority section, as the spec describes. Only standard queries (opcode QUERY, message type query) are filtered; anything else goes to the catalog.
 
 ### D2. Rule set: immutable, built whole, swapped atomically
 A `RuleSet` holds, separately for allow and block:

@@ -29,8 +29,8 @@
 
 ## 5. Blocked responses
 
-- [ ] 5.1 Implement the `null`, `address`, `nodata` and `nxdomain` response builders with a configurable TTL, echoing ID, question and RD; verify unit tests at the message level for every blocked-responses scenario (including MX in null mode, a missing address family, and SOA in the authority section)
-- [ ] 5.2 Wire the builders into `FilterHandler` per D1 (or the fallback recorded in 1.2); verify a wire-level test that a blocked query gets the expected answer and the upstream receives nothing
+- [x] 5.1 Implement the `null`, `address`, `nodata` and `nxdomain` response builders with a configurable TTL, echoing ID, question and RD; verify unit tests at the message level for every blocked-responses scenario (including MX in null mode, a missing address family, and SOA in the authority section)
+- [x] 5.2 Wire the builders into `FilterHandler` per D1 (or the fallback recorded in 1.2); verify a wire-level test that a blocked query gets the expected answer and the upstream receives nothing
 
 ## 6. List sources and refresh
 

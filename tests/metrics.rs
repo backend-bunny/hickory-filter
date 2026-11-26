@@ -462,6 +462,58 @@ async fn metrics_reflect_queries_refreshes_and_failures_without_identifying_anyo
     }
     assert!(!text.to_lowercase().contains("client"), "no client label");
 
+    // --- the README documents exactly what is exported ---
+    let rows = common::readme_table("### Metrics reference");
+    let documented: Vec<String> = rows
+        .iter()
+        .map(|row| common::backticked(&row[0])[0].clone())
+        .collect();
+    let exported = scrape(http).await;
+    for row in &rows {
+        let name = common::backticked(&row[0])[0].clone();
+        let kind = row[1].as_str();
+        let labels = common::backticked(&row[2]);
+        let series: Vec<_> = exported
+            .series
+            .iter()
+            .filter(|(n, _, _)| {
+                *n == name
+                    || (kind == "histogram"
+                        && ["_bucket", "_sum", "_count"]
+                            .iter()
+                            .any(|s| *n == format!("{name}{s}")))
+            })
+            .collect();
+        assert!(
+            !series.is_empty(),
+            "documented metric {name} is not exported"
+        );
+        assert!(
+            exported.text.contains(&format!("# TYPE {name} {kind}")),
+            "{name} is not exported as a {kind}"
+        );
+        for label in &labels {
+            assert!(
+                series.iter().any(|(_, l, _)| l.contains_key(label)),
+                "documented label {label} never appears on {name}"
+            );
+        }
+        for (_, l, _) in &series {
+            for key in l.keys() {
+                assert!(
+                    labels.contains(key) || key == "le",
+                    "{name} has the undocumented label {key}"
+                );
+            }
+        }
+    }
+    for own in hickory_filter::metrics::OWN_METRICS {
+        assert!(
+            documented.iter().any(|d| d == own),
+            "{own} is recorded but not documented"
+        );
+    }
+
     shutdown(failing).await;
     shutdown(running).await;
 }

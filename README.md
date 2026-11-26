@@ -96,6 +96,66 @@ Upstream and bootstrap resolvers are IP addresses, never host names:
 `tls://` requires the `#name`. Refresh intervals take units (`"6h"`, `"90m"`);
 `0` disables.
 
+## Metrics and logs
+
+An HTTP endpoint serves `/health`, `/ready` and `/metrics` on the address in
+`http` (default `0.0.0.0:8080`; `http = false` turns it off). `/health` is 200
+while the process runs, whatever state the lists are in. `/ready` is 503 until
+the listeners are bound and the first list load has finished, then 200; a later
+refresh failure never makes it fail. `/metrics` is the Prometheus text format.
+
+Metrics never carry a client address or a queried name: those would make the
+number of series unbounded and are personal data. Per-client and per-name
+views come from the query log below.
+
+### Metrics reference
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `hickory_filter_queries_total` | counter | `outcome`, `type` | Queries answered. `outcome` is `allowed` (an allow rule matched, forwarded), `blocked`, `passed` (no match, forwarded) or `upstream_error` (forwarded, no upstream answered). `type` is A, AAAA, CNAME, HTTPS, MX, NS, PTR, SOA, SRV, SVCB, TXT, or `other` |
+| `hickory_filter_query_duration_seconds` | histogram | `outcome` | Time taken to answer |
+| `hickory_filter_rules` | gauge | `action`, `kind` | Rules in the live rule set, by `allow` or `block` and `domain`, `wildcard` or `regex` |
+| `hickory_filter_ruleset_swaps_total` | counter | | Times the rule set was replaced (the first rule set at startup counts) |
+| `hickory_filter_ruleset_last_swap_timestamp_seconds` | gauge | | Unix time of the last replacement |
+| `hickory_filter_list_rules` | gauge | `action`, `type`, `url` | Rules in a list's last good content |
+| `hickory_filter_list_skipped_lines` | gauge | `action`, `type`, `url` | Lines skipped as invalid in the last successful load |
+| `hickory_filter_list_last_success_timestamp_seconds` | gauge | `action`, `type`, `url` | Unix time of the last successful load or refresh |
+| `hickory_filter_list_last_refresh_success` | gauge | `action`, `type`, `url` | 1 if the last refresh attempt succeeded, 0 if it failed |
+| `hickory_resolver_outgoing_queries_total` | counter | `protocol` | Queries sent to the upstreams |
+| `hickory_resolver_name_server_query_responses_total` | counter | `protocol`, `status` | Upstream responses by outcome (`success`, `timeout`, and failures), aggregated over the upstreams |
+| `hickory_resolver_cache_hit_total` | counter | | Queries answered from the response cache |
+| `hickory_resolver_cache_miss_total` | counter | | Queries that had to go upstream |
+
+The list `url` label has credentials removed, and a query string is shown as
+`?…`. A list that has not been loaded yet has no series.
+
+### Query log
+
+The query log is off by default. Queries are then logged only at the `debug`
+level. With `query_log = true` in the `[log]` table, every answered query is
+logged at `info` (and shows even at a quieter level), so that a log collector
+can turn the lines into per-client and per-name views. Lines carry the target
+`hickory_filter::query`; in JSON (`format = "json"`) the fields below are
+top-level members of the line's object, so a collector can select by target
+and read them directly.
+
+#### Query log fields
+
+| Field | Meaning |
+|---|---|
+| `client` | The client address, as set by `query_log_client`: `address` (the default), `masked` (the last octet of an IPv4 address zeroed, an IPv6 address cut to its first 48 bits) or `omit` (no field) |
+| `name` | The queried name, lower case, without the trailing dot |
+| `type` | The query type, for example `A` or `AAAA` |
+| `outcome` | `allowed`, `blocked`, `passed` or `upstream_error`, as in the metrics |
+| `rcode` | The response code sent to the client, such as `NOERROR`, `NXDOMAIN` or `SERVFAIL` |
+| `duration_ms` | The time taken to answer, in milliseconds |
+
+Other lines are logged too: list loads and refreshes (`list` with credentials
+removed, `result` as `loaded`, `unchanged` or `failed`, `rules`, `skipped`, and
+a warning with `reason` on failure) and rule set replacements. `level` is
+`error`, `warn`, `info` (the default), `debug` or `trace`, and `format` is
+`text` (the default) or `json`.
+
 ## Memory and lookup cost (measured)
 
 Exact and wildcard names live in reversed-domain FSTs (finite-state

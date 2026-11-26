@@ -322,3 +322,36 @@ async fn text_format_logs_a_readable_query_line() {
         assert!(line.contains(part), "{part}: {line}");
     }
 }
+
+#[tokio::test]
+async fn the_documented_query_log_fields_are_exactly_the_logged_fields() {
+    let rows = common::readme_table("#### Query log fields");
+    let mut documented: Vec<String> = rows
+        .iter()
+        .map(|row| common::backticked(&row[0])[0].clone())
+        .collect();
+    documented.sort();
+    let mut fields: Vec<String> = QUERY_FIELDS.iter().map(|f| (*f).to_owned()).collect();
+    fields.sort();
+    assert_eq!(documented, fields, "README.md and the code disagree");
+    assert!(
+        common::readme().contains(QUERY_TARGET),
+        "the README names the target"
+    );
+
+    // And a real query line carries each documented field.
+    let config = config("format = \"json\"\nquery_log = true", "");
+    let (buffer, _guard) = capture(&config);
+    let running = start(&config).await.expect("start");
+    ask(running.addrs()[0], "ads.example.").await;
+    shutdown(running).await;
+    let lines = buffer.query_lines();
+    assert_eq!(lines.len(), 1);
+    for field in &documented {
+        assert!(
+            lines[0].get(field.as_str()).is_some(),
+            "{field} is not logged: {}",
+            lines[0]
+        );
+    }
+}

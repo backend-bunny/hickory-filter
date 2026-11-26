@@ -157,3 +157,44 @@ async fn handle(
         }
     }
 }
+
+/// The text of README.md.
+pub fn readme() -> String {
+    std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/README.md")).expect("README.md")
+}
+
+/// The rows of the table under `heading` in README.md, as trimmed cells. Only
+/// rows whose first cell starts with a backtick count, so headers are skipped.
+pub fn readme_table(heading: &str) -> Vec<Vec<String>> {
+    let mut in_section = false;
+    let mut rows = Vec::new();
+    for line in readme().lines() {
+        if line.trim_end() == heading {
+            in_section = true;
+            continue;
+        }
+        if in_section && line.starts_with('#') {
+            break;
+        }
+        if in_section && line.starts_with("| `") {
+            rows.push(
+                line.trim()
+                    .trim_matches('|')
+                    .split('|')
+                    .map(|cell| cell.trim().to_owned())
+                    .collect(),
+            );
+        }
+    }
+    assert!(!rows.is_empty(), "no table under {heading} in README.md");
+    rows
+}
+
+/// The words between backticks in a table cell.
+pub fn backticked(cell: &str) -> Vec<String> {
+    cell.split('`')
+        .skip(1)
+        .step_by(2)
+        .map(str::to_owned)
+        .collect()
+}

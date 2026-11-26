@@ -3,7 +3,7 @@
 ## 1. Project setup and API spike
 
 - [x] 1.1 Create the Cargo project (`hickory-filter` binary), `rust-toolchain.toml` with a pinned stable toolchain, `LICENSE-MIT` and `LICENSE-APACHE` (`license = "MIT OR Apache-2.0"` in `Cargo.toml`), and CI-equivalent local checks; verify `cargo fmt --check`, `cargo clippy -- -D warnings` and `cargo test` pass on the empty skeleton
-- [ ] 1.2 Spike D1 against the latest `hickory-server` release, pinned exactly: a `RequestHandler` that answers one hard-coded name with NXDOMAIN + SOA in the authority section and AA set, and delegates everything else to a `Catalog` with a `ForwardZoneHandler`; verify with a wire-level test (hickory client against the running server) and record the outcome (request-level, or the ZoneHandler fallback) in design.md D1
+- [x] 1.2 Spike D1 against the latest `hickory-server` release, pinned exactly: a `RequestHandler` that answers one hard-coded name with NXDOMAIN + SOA in the authority section and AA set, and delegates everything else to a `Catalog` with a `ForwardZoneHandler`; verify with a wire-level test (hickory client against the running server) and record the outcome (request-level, or the ZoneHandler fallback) in design.md D1
 
 ## 2. Configuration
 

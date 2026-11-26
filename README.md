@@ -71,8 +71,9 @@ A standalone binary using `hickory-server` as a library:
 - The filter sits in front of the catalog, so it decides before anything is
   forwarded or cached, and it builds blocked responses itself (rcode, flags,
   SOA).
-- Rules: exact names in a hash set, wildcards as a suffix set checked label
-  by label, and all regexes compiled into one set (one pass per query).
+- Rules: exact names and wildcard bases in reversed-domain FSTs (moving from
+  hash sets, see Memory below), and all regexes compiled into one set (one
+  pass per query).
 - A refresh builds a complete new rule set off the query path and swaps it
   in atomically, so queries never see a half-loaded list.
 
@@ -120,9 +121,9 @@ Memory tracks the live rule set, since there is no garbage collector, and a
 refresh briefly holds the old and new sets at once, so size for roughly twice
 the steady figure. The release binary is statically linked against musl,
 whose allocator behaves differently; these numbers are from the development
-build and still need repeating on the release build. A reversed-domain FST
-remains a later option if memory matters more than the simplicity of hash
-sets; these numbers are the baseline to compare it against.
+build and still need repeating on the release build. The decision is to move exact and
+wildcard names to reversed-domain FSTs to shrink this footprint; these
+numbers are the hash-set baseline to compare against.
 
 ## Packaging (planned)
 

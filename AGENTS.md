@@ -34,6 +34,9 @@ in `openspec/changes/`. Use the `openspec-*` skills (`.claude/skills/` →
 - **Fail closed at startup, fail open on refresh.** A config error stops
   startup. A refresh failure is logged, counted in metrics, and keeps
   serving the previous rules.
+- **Rule storage is reversed-domain FSTs** (the `fst` crate): immutable, built
+  whole on each refresh and swapped atomically, behind the `NameIndex` trait.
+  Hash sets stay only as a test oracle.
 - **Container-friendly by default:** runs as non-root, binds ports ≥ 1024
   unless configured otherwise, needs no writable root filesystem (the
   on-disk list cache is optional and points at a configured directory), and
@@ -81,7 +84,5 @@ in `openspec/changes/`. Use the `openspec-*` skills (`.claude/skills/` →
 
 ## Open decisions
 
-Record the answer in the relevant spec/design, then remove it here.
-
-1. **Rule storage:** hash sets first; a reversed-domain FST later if
-   benchmarks justify it.
+None at the moment. Record new ones here with a proposal, and remove them once
+the answer is in the relevant spec or design.

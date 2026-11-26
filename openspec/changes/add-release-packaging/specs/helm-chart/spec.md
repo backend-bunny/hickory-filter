@@ -96,7 +96,7 @@ The chart SHALL name the HTTP port on the pod and the Service. It SHALL offer, e
 - **THEN** rendering fails with a message that the metrics endpoint is disabled
 
 ### Requirement: Scrape annotations for annotation-based discovery
-The chart SHALL offer, off by default, the conventional scrape annotations on the pod template (`prometheus.io/scrape: "true"`, `prometheus.io/port` and `prometheus.io/path: "/metrics"`) for collectors and scrapers that discover pods by annotation. The port SHALL be derived from the HTTP address in the chart's configuration, so the annotation can't drift from the port the server listens on. An annotation set explicitly in `podAnnotations` SHALL take precedence. Enabling it with the HTTP endpoint disabled in the configuration SHALL fail the render with a message saying so.
+The chart SHALL offer, off by default, the conventional scrape annotations on the pod template (`prometheus.io/scrape: "true"`, `prometheus.io/port` and `prometheus.io/path: "/metrics"`) for collectors that discover pods by annotation. The port SHALL be derived from the HTTP address in the chart's configuration, so it can't drift from the port the server listens on.
 
 #### Scenario: Default port
 - **WHEN** the chart is rendered with the scrape annotations enabled and the default HTTP address
@@ -107,14 +107,17 @@ The chart SHALL offer, off by default, the conventional scrape annotations on th
 - **WHEN** the chart is rendered with the scrape annotations enabled
 - **THEN** the annotation `prometheus.io/port` is `"9090"`
 
+#### Scenario: Off by default
+- **WHEN** the chart is rendered with default values
+- **THEN** the pod template has no `prometheus.io/*` annotations
+
+### Requirement: Scrape annotations can be overridden and need the endpoint
+An annotation set explicitly in `podAnnotations` SHALL take precedence over the generated one, and enabling the scrape annotations with the HTTP endpoint disabled in the configuration SHALL fail the render with a message saying so.
+
 #### Scenario: Explicit annotation wins
 - **GIVEN** the scrape annotations are enabled and `podAnnotations` sets `prometheus.io/path` to `/custom`
 - **WHEN** the chart is rendered
 - **THEN** the pod template has `prometheus.io/path: /custom` and the other two generated annotations
-
-#### Scenario: Off by default
-- **WHEN** the chart is rendered with default values
-- **THEN** the pod template has no `prometheus.io/*` annotations
 
 #### Scenario: Endpoint disabled
 - **WHEN** the scrape annotations are enabled and the configuration disables the HTTP endpoint

@@ -18,7 +18,8 @@ if [ -d .github ]; then
 fi
 
 # 2. Link hosts. Add a host here only when the repo depends on that service.
-ALLOWED_HOSTS='^(github\.com/backend-bunny/hickory-filter|ghcr\.io/backend-bunny(/.*)?|(.+\.)?example(\.[a-z]+)?|localhost|127\.0\.0\.1)$'
+#    Documentation address ranges and example names are fine in examples.
+ALLOWED_HOSTS='^(github\.com/backend-bunny/hickory-filter|ghcr\.io/backend-bunny(/.*)?|(.+\.)?example(\.[a-z]+)?|localhost|127\.0\.0\.1|(192\.0\.2|198\.51\.100|203\.0\.113)\.[0-9]+)$'
 while IFS=: read -r file lineno url; do
   host_path="${url#*://}"
   host_path="${host_path%%[\"\'\`) >,;]*}"

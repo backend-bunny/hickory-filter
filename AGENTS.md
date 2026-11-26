@@ -7,12 +7,13 @@ planned architecture.
 
 ## Status
 
-The DNS server is implemented and its specs are in `openspec/specs/`
-(`dns-forwarding`, `filter-rules`, `blocklist-sources`, `blocked-responses`,
-`observability`). Still planned, as changes in `openspec/changes/`:
-`add-release-packaging` (image, Helm chart, release workflows) and
-`add-grafana-dashboard`. Work happens through OpenSpec: implement agreed
-changes, and don't expand scope without the user. Use the `openspec-*` skills
+The DNS server and the Grafana dashboard are implemented and their specs are
+in `openspec/specs/` (`dns-forwarding`, `filter-rules`, `blocklist-sources`,
+`blocked-responses`, `observability`, `grafana-dashboard`). The image, the Helm
+chart and the release pipeline are built and tested in CI; what remains of the
+`add-release-packaging` change in `openspec/changes/` is verifying a first
+release. Work happens through OpenSpec: implement agreed changes, and don't
+expand scope without the user. Use the `openspec-*` skills
 (`.claude/skills/` → `.agents/skills/`): propose, explore, update, apply,
 archive.
 

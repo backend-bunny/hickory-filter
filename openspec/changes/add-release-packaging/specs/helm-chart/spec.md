@@ -95,6 +95,31 @@ The chart SHALL name the HTTP port on the pod and the Service. It SHALL offer, e
 - **WHEN** a monitor is enabled and the configuration disables the HTTP endpoint
 - **THEN** rendering fails with a message that the metrics endpoint is disabled
 
+### Requirement: Scrape annotations for annotation-based discovery
+The chart SHALL offer, off by default, the conventional scrape annotations on the pod template (`prometheus.io/scrape: "true"`, `prometheus.io/port` and `prometheus.io/path: "/metrics"`) for collectors and scrapers that discover pods by annotation. The port SHALL be derived from the HTTP address in the chart's configuration, so the annotation can't drift from the port the server listens on. An annotation set explicitly in `podAnnotations` SHALL take precedence. Enabling it with the HTTP endpoint disabled in the configuration SHALL fail the render with a message saying so.
+
+#### Scenario: Default port
+- **WHEN** the chart is rendered with the scrape annotations enabled and the default HTTP address
+- **THEN** the pod template's annotations include `prometheus.io/scrape: "true"`, `prometheus.io/port: "8080"` and `prometheus.io/path: "/metrics"`
+
+#### Scenario: Port follows the configuration
+- **GIVEN** the configuration sets the HTTP address to port 9090
+- **WHEN** the chart is rendered with the scrape annotations enabled
+- **THEN** the annotation `prometheus.io/port` is `"9090"`
+
+#### Scenario: Explicit annotation wins
+- **GIVEN** the scrape annotations are enabled and `podAnnotations` sets `prometheus.io/path` to `/custom`
+- **WHEN** the chart is rendered
+- **THEN** the pod template has `prometheus.io/path: /custom` and the other two generated annotations
+
+#### Scenario: Off by default
+- **WHEN** the chart is rendered with default values
+- **THEN** the pod template has no `prometheus.io/*` annotations
+
+#### Scenario: Endpoint disabled
+- **WHEN** the scrape annotations are enabled and the configuration disables the HTTP endpoint
+- **THEN** rendering fails with a message that the metrics endpoint is disabled
+
 ### Requirement: Optional Grafana dashboard resources
 The chart SHALL offer, each off by default, a `GrafanaDashboard` custom resource for the Grafana operator (`grafana.integreatly.org`) and a ConfigMap labelled for the Grafana sidecar dashboard loader, each carrying the dashboard file packaged in the chart's `dashboards/` directory. The operator resource SHALL take its instance selector and folder from values, and the ConfigMap's label and namespace SHALL be configurable.
 

@@ -1,0 +1,78 @@
+# Agent Guide — hickory-filter
+
+A filtering DNS forwarder: `hickory-server` used as a library, plus a filter
+with allow/block rules, several list formats, and scheduled refresh of
+blocklists from web servers. See `README.md` for the features and the
+planned architecture.
+
+## Status
+
+Design phase. **Don't write implementation code until the user asks for it.**
+Work happens through OpenSpec: the specs in `openspec/specs/` and the changes
+in `openspec/changes/`. Use the `openspec-*` skills (`.claude/skills/` →
+`.agents/skills/`): propose, explore, update, apply, archive.
+
+## Hard rules
+
+- **Self-contained docs.** Nothing in this repo (README, AGENTS.md, specs,
+  designs, comments, commit messages) references other projects, products or
+  repositories. The only exceptions are the libraries the code depends on
+  and the build tools and base distributions the packaging uses, named where
+  they are used. Describe formats by their syntax (`||x^`,
+  `address=/x/#`), not by the tools they come from.
+- **Library, not fork.** Use `hickory-server`'s public API (`RequestHandler`,
+  `Catalog`, `ForwardZoneHandler`, `Server`). If something we need isn't
+  public, raise it with the user. Don't vendor or patch the library.
+- **Pin `hickory-server` to an exact release** in `Cargo.toml`, with
+  `Cargo.lock` committed. Its API is pre-1.0, so an upgrade is its own change.
+- **Allow always wins** over any block rule, from any source.
+- **The query path never blocks on I/O or on a refresh.** A refresh builds a
+  new rule set and swaps it in atomically. A failed fetch keeps the last good
+  copy of that list. It never silently drops the list's rules.
+- **Never resolve list hosts through ourselves.** List fetches use the
+  configured bootstrap resolver (or the system resolver when none is set).
+- **Fail closed at startup, fail open on refresh.** A config error stops
+  startup. A refresh failure is logged, counted in metrics, and keeps
+  serving the previous rules.
+- **Container-friendly by default:** runs as non-root, binds ports ≥ 1024
+  unless configured otherwise, needs no writable root filesystem (the
+  on-disk list cache is optional and points at a configured directory), and
+  logs to stderr.
+- **Rust:** stable toolchain pinned in `rust-toolchain.toml`. `cargo fmt`,
+  `cargo clippy -- -D warnings` and `cargo test` pass on every change. No
+  `unsafe`. rustls, not OpenSSL.
+- **Releases are tags** (`vX.Y.Z`) on an immutable commit. The release builds
+  and publishes the image and the Helm chart (OCI) from this repo. See the
+  `add-release-packaging` change for details.
+- **Packaging:** melange + apko only, **no Dockerfiles**. The binary is
+  **statically linked against musl**: built in an Alpine melange environment
+  (Wolfi's Rust targets glibc only), with a distroless Wolfi runtime image
+  holding the binary and CA certificates, and no libc. It runs as uid/gid
+  65532.
+- **Throwaway melange keys:** generate one per build, sign, hand the public
+  half to apko (`--keyring-append`), discard both. Never commit or store a
+  package signing key.
+- **Keyless signing only:** cosign with the CI's OIDC identity. Sign and
+  attest the image **index** digest and the chart digest (SBOM, provenance,
+  notices). No long-lived signing keys.
+- **Licenses travel with the binary:** third-party notices are generated
+  from the vendored crates, shipped in the image and attested. A license
+  outside `deny.toml`'s allowlist fails CI.
+- **Lockfiles change only by review:** `Cargo.lock` and `apko.lock.json` are
+  committed. Builds use `--locked` / `--lockfile`, and nothing relocks
+  silently in CI.
+- Don't name private consumers, clusters or networks in this repo's docs.
+
+## Open decisions
+
+Record the answer in the relevant spec/design, then remove it here.
+
+1. **License:** proposed `MIT OR Apache-2.0`.
+2. **Config format:** proposed TOML for the server, with rules written as
+   lines (`block wildcard *.x`) inside it.
+3. **Rule storage:** hash sets first; a reversed-domain FST later if
+   benchmarks justify it.
+4. **Repo hosting:** not created yet. Registry and chart paths
+   (`<registry>/<owner>`) follow from it.
+5. **Release PR tooling:** not picked. `hack/check-version.sh` enforces
+   matching versions either way.

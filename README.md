@@ -6,9 +6,10 @@ else to upstream resolvers, and keeps its blocklists current by fetching them
 from web servers on a schedule.
 
 > **Status.** The DNS server is implemented: filtering, lists with scheduled
-> refresh, forwarding, metrics and logs. The container image, the Helm chart
-> and signed releases are still planned (see Packaging below). The design lives
-> in [`openspec/`](openspec/).
+> refresh, forwarding, metrics and logs. The container image and the Helm chart
+> build and are tested in CI; the first signed release is still to come (see
+> [Container image, chart and releases](#container-image-chart-and-releases)).
+> The design lives in [`openspec/`](openspec/).
 
 ## Quick start
 
@@ -293,19 +294,60 @@ from generated names and the development (glibc) build. The release binary is
 statically linked against musl, whose allocator behaves differently, so they
 should be repeated on a real merged list and on the release build.
 
-## Packaging (planned)
+## Container image, chart and releases
 
 - **Image:** `ghcr.io/backend-bunny/hickory-filter`, built with melange and apko
   (no Dockerfile). A static musl binary plus CA certificates: no shell, no
-  libc. Runs as uid/gid 65532 with all capabilities dropped and a read-only
-  root filesystem. Tags `X.Y.Z` and `sha-<commit>`; **pin by digest**.
+  libc. Runs as uid/gid 65532, so it needs no capabilities and works with a
+  read-only root filesystem (the only writable path it needs is `/tmp`, plus a
+  cache directory if you enable one). The configuration is read from
+  `/etc/hickory-filter/config.toml`. Tags are `X.Y.Z` and `sha-<commit>`, never
+  `latest`: **pin by digest**.
 - **Helm chart:** `oci://ghcr.io/backend-bunny/charts/hickory-filter`. Each
   release pins the image digest it shipped with, and its defaults meet the
-  `restricted` Pod Security Standard.
+  `restricted` Pod Security Standard. See [`charts/hickory-filter`](charts/hickory-filter/README.md).
 - **Verifiable:** image and chart are signed keylessly with cosign and carry
-  SLSA provenance. The image also carries an SPDX SBOM (including the Rust
+  build provenance. The image also carries an SPDX SBOM (including the Rust
   crates) and a third-party license notices attestation. The notices are
   also in the image at `/usr/share/doc/hickory-filter/`.
+
+### Verify a release
+
+Every release's notes list the image digest and the chart digest. Use them
+with the identity of the release workflow:
+
+```sh
+IMAGE=ghcr.io/backend-bunny/hickory-filter@sha256:<digest>
+IDENTITY='^https://github.com/backend-bunny/hickory-filter/'
+ISSUER=https://token.actions.githubusercontent.com
+
+# signature, SBOM and license notices on the image index
+cosign verify "$IMAGE" --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER"
+cosign verify-attestation --type spdxjson "$IMAGE" \
+  --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER"
+cosign verify-attestation \
+  --type https://github.com/backend-bunny/hickory-filter/notices/v1 "$IMAGE" \
+  --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER"
+
+# build provenance of the image and of the chart
+gh attestation verify "oci://$IMAGE" --repo backend-bunny/hickory-filter
+cosign verify ghcr.io/backend-bunny/charts/hickory-filter@sha256:<chart digest> \
+  --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER"
+```
+
+### How a release is made
+
+Releases come from Conventional Commit messages. Every merge to `main`
+updates one pull request titled `chore: release X.Y.Z`, which bumps the
+version everywhere it appears (`Cargo.toml`, `Cargo.lock`, the package
+recipe and the chart) and updates `CHANGELOG.md`. **Merging that pull
+request is the release:** it creates the `vX.Y.Z` tag and the GitHub Release,
+runs the checks again on the tagged commit, builds and tests the image, pushes
+it, signs and attests it, then publishes and signs the chart pinned to that
+image digest. Pushing a tag by hand publishes nothing. Locally, `task build`
+builds the image and `task test` runs the smoke test (both need a container
+runtime), `task chart:test` checks the chart, and `task publish:dry-run` shows
+the tags and packages the chart without pushing.
 
 ## License
 

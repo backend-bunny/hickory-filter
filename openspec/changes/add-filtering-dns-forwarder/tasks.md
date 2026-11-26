@@ -14,9 +14,9 @@
 
 ## 3. Rule parsing
 
-- [ ] 3.1 Implement name normalisation and the inline rule-line parser (`<action> <type> <value>`, `<action> list <type> <url>`); verify unit tests for each spec scenario in filter-rules "Rule actions and types" and "Name normalisation"
-- [ ] 3.2 Implement the wildcard parser for `x`, `*.x`, `.x`, `||x^`, `address=/x/<any>`, skipping `$option` lines and rejecting invalid names; verify table-driven tests covering every spelling and the filter-rules wildcard scenarios
-- [ ] 3.3 Implement the domain, hosts (any IPv4/IPv6, any whitespace) and regex line parsers with comment stripping and per-line skip counting; verify tests for the filter-rules "List line syntax" and "Unparseable list lines" scenarios
+- [x] 3.1 Implement name normalisation and the inline rule-line parser (`<action> <type> <value>`, `<action> list <type> <url>`); verify unit tests for each spec scenario in filter-rules "Rule actions and types" and "Name normalisation"
+- [x] 3.2 Implement the wildcard parser for `x`, `*.x`, `.x`, `||x^`, `address=/x/<any>`, skipping `$option` lines and rejecting invalid names; verify table-driven tests covering every spelling and the filter-rules wildcard scenarios
+- [x] 3.3 Implement the domain, hosts (any IPv4/IPv6, any whitespace) and regex line parsers with comment stripping and per-line skip counting; verify tests for the filter-rules "List line syntax" and "Unparseable list lines" scenarios
 
 ## 4. Rule set and matching
 

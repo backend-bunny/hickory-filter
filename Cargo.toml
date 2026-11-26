@@ -14,6 +14,7 @@ unsafe_code = "forbid"
 async-trait = "0.1.92"
 hickory-server = { version = "=0.26.4", features = ["resolver"] }
 humantime = "2.4.0"
+regex = "1.13.2"
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.2.3"
 

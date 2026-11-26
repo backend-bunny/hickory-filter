@@ -1,7 +1,8 @@
 //! The configuration file: one TOML file, strict about unknown keys.
 //!
-//! Rules are kept as the text lines they are written as; the rule-line parser
-//! (shared by inline rules and list files) validates them in its own module.
+//! Rules are kept as the text lines they are written as. Loading a
+//! configuration runs every line through the rule-line parser, so a bad rule
+//! stops startup (and fails `--check`) with the rule named.
 
 use std::{
     fmt,
@@ -15,6 +16,8 @@ use serde::{
     Deserialize, Deserializer,
     de::{self, Visitor},
 };
+
+use crate::rules::{RuleLine, parse_rule_line};
 
 /// Where the server looks for its configuration when `--config` isn't given.
 pub const DEFAULT_CONFIG_PATH: &str = "/etc/hickory-filter/config.toml";
@@ -122,6 +125,35 @@ impl Config {
                         "`ipv4` and `ipv6` only apply to mode `address`",
                     ));
                 }
+            }
+        }
+        for rule in &self.filter.rules {
+            match parse_rule_line(rule) {
+                Ok(RuleLine::Rule(_)) => {}
+                Ok(RuleLine::List(_)) => {
+                    return Err(invalid(
+                        "filter.rules",
+                        &format!(
+                            "rule `{rule}`: lists are declared in `[[filter.lists]]`, not in `rules`"
+                        ),
+                    ));
+                }
+                Err(e) => return Err(invalid("filter.rules", &e.to_string())),
+            }
+        }
+        for list in &self.filter.lists {
+            match parse_rule_line(&list.rule) {
+                Ok(RuleLine::List(_)) => {}
+                Ok(RuleLine::Rule(_)) => {
+                    return Err(invalid(
+                        "filter.lists",
+                        &format!(
+                            "rule `{}`: a list entry must be `<action> list <type> <url>`",
+                            list.rule
+                        ),
+                    ));
+                }
+                Err(e) => return Err(invalid("filter.lists", &e.to_string())),
             }
         }
         Ok(())
@@ -591,6 +623,55 @@ mod tests {
             let err = bad.parse::<Resolver>().expect_err(bad);
             assert!(err.contains(needle), "{bad}: {err}");
         }
+    }
+
+    #[test]
+    fn valid_inline_rules_and_lists_load() {
+        let config = parse(&format!(
+            "{MINIMAL}\n[filter]\nrules = [\"block wildcard ||ads.example^\", \"allow domain ok.ads.example\", \"block regex ^ad[0-9]+\\\\.\"]\n[[filter.lists]]\nrule = \"block list hosts https://lists.example/hosts.txt\"\n"
+        ))
+        .expect("valid");
+        assert_eq!(config.filter.rules.len(), 3);
+    }
+
+    #[test]
+    fn a_bad_inline_rule_fails_startup_naming_file_key_and_rule() {
+        for (rule, needle) in [
+            ("block glob *.example", "accepted types"),
+            ("block wildcard ||exa mple^", "not a valid wildcard"),
+            ("block regex (unclosed", "regular expression"),
+            ("block domain", "missing value"),
+        ] {
+            let text = error_text(&format!("{MINIMAL}\n[filter]\nrules = [\"{rule}\"]\n"));
+            assert!(text.contains("test.toml"), "{text}");
+            assert!(text.contains("`filter.rules`"), "{text}");
+            assert!(text.contains(rule), "{text}");
+            assert!(text.contains(needle), "{rule}: {text}");
+        }
+    }
+
+    #[test]
+    fn lists_are_declared_in_lists_not_in_rules() {
+        let text = error_text(&format!(
+            "{MINIMAL}\n[filter]\nrules = [\"block list hosts https://lists.example/h.txt\"]\n"
+        ));
+        assert!(text.contains("[[filter.lists]]"), "{text}");
+    }
+
+    #[test]
+    fn a_bad_list_declaration_fails_startup() {
+        let text = error_text(&format!(
+            "{MINIMAL}\n[[filter.lists]]\nrule = \"block list hosts ftp://lists.example/a.txt\"\n"
+        ));
+        assert!(text.contains("`filter.lists`"), "{text}");
+        assert!(text.contains("unsupported URL scheme"), "{text}");
+        let text = error_text(&format!(
+            "{MINIMAL}\n[[filter.lists]]\nrule = \"block domain ads.example\"\n"
+        ));
+        assert!(
+            text.contains("must be `<action> list <type> <url>`"),
+            "{text}"
+        );
     }
 
     #[test]

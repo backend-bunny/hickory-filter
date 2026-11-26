@@ -8,13 +8,15 @@
 
 use std::{
     net::{Ipv4Addr, SocketAddr},
+    path::Path,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
 use hickory_filter::{
-    config::{Response, ResponseMode},
+    config::{Config, Response, ResponseMode},
     filter_handler::FilterHandler,
+    forwarder::build_catalog,
     rules::{RuleLine, parse_rule_line},
     ruleset::{LiveRules, RuleSet},
 };
@@ -23,13 +25,11 @@ use hickory_server::{
     net::runtime::Time,
     proto::{
         op::{Message, Metadata, Query, ResponseCode},
-        rr::{LowerName, Name, RData, Record, RecordType, rdata::A, rdata::AAAA},
+        rr::{Name, RData, Record, RecordType, rdata::A, rdata::AAAA},
         serialize::binary::BinEncodable,
     },
-    resolver::config::NameServerConfig,
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
-    store::forwarder::{ForwardConfig, ForwardZoneHandler},
-    zone_handler::{Catalog, MessageResponseBuilder},
+    zone_handler::MessageResponseBuilder,
 };
 use tokio::net::UdpSocket;
 
@@ -98,24 +98,28 @@ fn rule_set(lines: &[&str]) -> RuleSet {
     RuleSet::from_rules(&rules).expect("build")
 }
 
+fn config_for(upstream: SocketAddr, extra: &str) -> Config {
+    Config::parse(
+        Path::new("test.toml"),
+        &format!("upstreams = [\"{upstream}\"]\n{extra}\n"),
+    )
+    .expect("config")
+}
+
 async fn stack(rules: &[&str], response: Response) -> Stack {
+    stack_with(rules, response, "").await
+}
+
+/// A stack whose config has these extra top-level lines (such as `cache_size`).
+async fn stack_with(rules: &[&str], response: Response, extra_config: &str) -> Stack {
     let seen = Arc::new(Mutex::new(Vec::new()));
     let (upstream_addr, upstream) = spawn_server(StubUpstream {
         seen: Arc::clone(&seen),
     })
     .await;
 
-    let mut name_server = NameServerConfig::udp(upstream_addr.ip());
-    name_server.connections[0].port = upstream_addr.port();
-    let forwarder = ForwardZoneHandler::builder_tokio(ForwardConfig {
-        name_servers: vec![name_server],
-        options: None,
-    })
-    .build()
-    .expect("forwarder");
-    let mut catalog = Catalog::new();
-    catalog.upsert(LowerName::new(&Name::root()), vec![Arc::new(forwarder)]);
-
+    let config = config_for(upstream_addr, extra_config);
+    let catalog = build_catalog(&config).expect("catalog");
     let live = Arc::new(LiveRules::new(rule_set(rules)));
     let handler = FilterHandler::new(catalog, Arc::clone(&live), response);
     let (addr, filter) = spawn_server(handler).await;
@@ -139,7 +143,7 @@ async fn ask(server: SocketAddr, name: &str, qtype: RecordType, rd: bool) -> Mes
         .await
         .expect("send");
     let mut buf = [0u8; 512];
-    let (len, _) = tokio::time::timeout(Duration::from_secs(5), client.recv_from(&mut buf))
+    let (len, _) = tokio::time::timeout(Duration::from_secs(15), client.recv_from(&mut buf))
         .await
         .expect("timed out waiting for a response")
         .expect("recv");
@@ -341,4 +345,61 @@ async fn a_refresh_takes_effect_for_the_next_query() {
     // And the old rule is gone with the old set.
     let ads = query(s.addr, "ads.example.", RecordType::A).await;
     assert_eq!(ads.answers[0].data, RData::A(A(UPSTREAM_ANSWER)));
+}
+
+#[tokio::test]
+async fn a_cached_answer_does_not_survive_a_new_block() {
+    let s = stack(BLOCK, Response::default()).await;
+
+    // Answered by the upstream once, then from the cache.
+    for _ in 0..2 {
+        let a = query(s.addr, "news.example.", RecordType::A).await;
+        assert_eq!(a.answers[0].data, RData::A(A(UPSTREAM_ANSWER)));
+    }
+    assert_eq!(
+        s.seen.lock().unwrap().clone(),
+        vec!["news.example.".to_owned()],
+        "the second answer came from the cache"
+    );
+
+    // A refresh adds a rule for the cached name: the next query is blocked.
+    s.live.swap(rule_set(&["block domain news.example"]));
+    let blocked = query(s.addr, "news.example.", RecordType::A).await;
+    assert_eq!(blocked.answers[0].data, RData::A(A(Ipv4Addr::UNSPECIFIED)));
+    assert_eq!(s.seen.lock().unwrap().len(), 1, "and nothing went upstream");
+}
+
+#[tokio::test]
+async fn with_the_cache_disabled_every_query_reaches_the_upstream() {
+    let s = stack_with(BLOCK, Response::default(), "cache_size = 0").await;
+    for _ in 0..2 {
+        query(s.addr, "news.example.", RecordType::A).await;
+    }
+    assert_eq!(s.seen.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn unreachable_upstreams_give_servfail_and_never_a_blocked_style_answer() {
+    // An upstream address with nothing listening.
+    let dead = {
+        let socket = UdpSocket::bind("127.0.0.1:0").await.expect("bind");
+        socket.local_addr().expect("addr")
+    };
+    let config = config_for(dead, "");
+    let catalog = build_catalog(&config).expect("catalog");
+    let live = Arc::new(LiveRules::new(rule_set(BLOCK)));
+    let handler = FilterHandler::new(catalog, live, Response::default());
+    let (addr, _server) = spawn_server(handler).await;
+
+    let failed = query(addr, "ok.test.", RecordType::A).await;
+    assert_eq!(failed.metadata.response_code, ResponseCode::ServFail);
+    assert!(
+        failed.answers.is_empty(),
+        "no blocked-style answer: {failed:?}"
+    );
+
+    // A blocked name doesn't need the upstream at all.
+    let blocked = query(addr, "ads.example.", RecordType::A).await;
+    assert_eq!(blocked.metadata.response_code, ResponseCode::NoError);
+    assert_eq!(blocked.answers[0].data, RData::A(A(Ipv4Addr::UNSPECIFIED)));
 }

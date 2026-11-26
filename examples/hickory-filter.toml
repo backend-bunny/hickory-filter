@@ -15,6 +15,11 @@ listen = ["0.0.0.0:1053", "[::]:1053"]
 # Where queries that are not blocked are forwarded. At least one is required.
 upstreams = ["tls://192.0.2.53#dns.example", "192.0.2.54"]
 
+# The most forwarded answers kept in the response cache (each for at most its
+# TTL). 0 disables the cache. Rule changes apply to cached names at once,
+# because filtering happens before the cache.
+cache_size = 4096
+
 # Metrics, health and readiness. An address, or false to disable.
 http = "0.0.0.0:8080"
 

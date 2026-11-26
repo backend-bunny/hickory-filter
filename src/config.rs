@@ -66,7 +66,10 @@ pub struct Config {
     /// Upstream resolvers; at least one is required.
     #[serde(default)]
     pub upstreams: Vec<Resolver>,
-    /// Metrics, health and readiness endpoint, or `false` to disable it.
+    /// The most forwarded answers kept in the response cache; `0` disables it.
+    /// Default 4096.
+    #[serde(default = "default_cache_size")]
+    pub cache_size: u64,
     #[serde(default)]
     pub http: Http,
     #[serde(default)]
@@ -178,6 +181,10 @@ fn default_listen() -> Vec<SocketAddr> {
         SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 1053),
         SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 1053),
     ]
+}
+
+fn default_cache_size() -> u64 {
+    4096
 }
 
 /// An upstream or bootstrap resolver: an IP address with optional port, over
@@ -476,6 +483,7 @@ mod tests {
     fn minimal_config_gets_the_documented_defaults() {
         let config = parse(MINIMAL).expect("valid");
         assert_eq!(config.listen, default_listen());
+        assert_eq!(config.cache_size, 4096);
         assert_eq!(config.http, Http::default());
         assert_eq!(config.filter.refresh, Interval(Duration::from_secs(86400)));
         assert_eq!(config.filter.response, Response::default());
@@ -540,6 +548,15 @@ mod tests {
         let text = error_text("listen = [\"127.0.0.1:1053\"]\n");
         assert!(text.contains("`upstreams`"), "{text}");
         assert!(text.contains("at least one upstream"), "{text}");
+    }
+
+    #[test]
+    fn the_response_cache_size_is_configurable_and_zero_disables_it() {
+        let config = parse(&format!("{MINIMAL}\ncache_size = 100\n")).expect("valid");
+        assert_eq!(config.cache_size, 100);
+        let off = parse(&format!("{MINIMAL}\ncache_size = 0\n")).expect("valid");
+        assert_eq!(off.cache_size, 0);
+        assert!(error_text(&format!("{MINIMAL}\ncache_size = -1\n")).contains("cache_size"));
     }
 
     #[test]

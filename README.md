@@ -71,8 +71,8 @@ A standalone binary using `hickory-server` as a library:
 - The filter sits in front of the catalog, so it decides before anything is
   forwarded or cached, and it builds blocked responses itself (rcode, flags,
   SOA).
-- Rules: exact names and wildcard bases in reversed-domain FSTs (moving from
-  hash sets, see Memory below), and all regexes compiled into one set (one
+- Rules: exact names and wildcard bases in reversed-domain FSTs (one walk
+  over the automaton per lookup), and all regexes compiled into one set (one
   pass per query).
 - A refresh builds a complete new rule set off the query path and swaps it
   in atomically, so queries never see a half-loaded list.
@@ -98,32 +98,43 @@ Upstream and bootstrap resolvers are IP addresses, never host names:
 
 ## Memory and lookup cost (measured)
 
-Measured with `cargo run --release --example memory` and `cargo bench --bench
-lookup`, on a rule set of 1M exact names plus 5,000 wildcards, 50 regexes
-and 100 allow rules, x86_64 Linux, glibc allocator, Rust 1.98.1:
+Exact and wildcard names live in reversed-domain FSTs (finite-state
+transducers). Measured with `cargo run --release --example memory` and
+`cargo bench --bench lookup` on 1M exact names plus 5,000 wildcards, 50
+regexes and 100 allow rules (x86_64 Linux, glibc allocator, Rust 1.98.1). The
+names are generated to look like a merged blocklist: about 114,000
+registrable domains under a skewed spread of public suffixes, about 1% of
+them with 50 to 400 names and most with a handful, and subdomain labels
+mixing common words, digits and random hex. Compared with the hash-set
+implementation it replaced, on the same data:
 
-| | |
-|---|---|
-| Steady-state memory | 83 MiB resident, about 85 bytes per name |
-| During a refresh (old and new sets both live) | 176 MiB peak |
-| After the swap | 142 MiB resident (freed memory is not returned to the OS right away) |
-| Building the set | 0.4 s |
+| Memory | Hash sets | FST |
+|---|---|---|
+| Steady state, resident | 70 MiB (71 bytes per name) | 21 MiB (19 bytes per name) |
+| Size of the name index itself | not measured | 7.9 MiB (about 8 bytes per name) |
+| Peak while a refresh builds the replacement | 153 MiB | 83 MiB |
+| After the swap | 119 MiB | 23 MiB |
+| Building the set | 0.6 s | 0.7 s |
 
-| Lookup | Time |
-|---|---|
-| Allow hit | 23 ns |
-| Exact hit | 61 ns |
-| Miss (suffix walk plus the regex set) | 100 ns |
-| Wildcard hit, two labels below the base | 99 ns |
-| Regex hit (50 patterns) | 120 ns |
+| Lookup | Hash sets | FST |
+|---|---|---|
+| Exact hit | 42 ns | 175 ns |
+| Wildcard hit, two labels below the base | 87 ns | 290 ns |
+| Regex hit (50 patterns) | 119 ns | 193 ns |
+| Miss | 100 ns | 187 ns |
+| Miss under a populated suffix (`com`) | 116 ns | 284 ns |
 
-Memory tracks the live rule set, since there is no garbage collector, and a
-refresh briefly holds the old and new sets at once, so size for roughly twice
-the steady figure. The release binary is statically linked against musl,
-whose allocator behaves differently; these numbers are from the development
-build and still need repeating on the release build. The decision is to move exact and
-wildcard names to reversed-domain FSTs to shrink this footprint; these
-numbers are the hash-set baseline to compare against.
+The FST gives up two to four times on lookup speed, still well under a
+microsecond and negligible next to a DNS round trip, for a steady footprint
+about 70% smaller and a refresh peak about 45% smaller. Memory tracks the live
+rule set, since there is no garbage collector, and a refresh briefly holds the
+old and new sets while the replacement builds, so size for the peak figure. The
+build collects its keys in one contiguous buffer instead of one allocation per
+name, which keeps the heap from fragmenting and lets freed memory go back to
+the OS; most of the remaining peak is that transient buffer. The numbers come
+from generated names and the development (glibc) build. The release binary is
+statically linked against musl, whose allocator behaves differently, so they
+should be repeated on a real merged list and on the release build.
 
 ## Packaging (planned)
 

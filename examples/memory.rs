@@ -5,6 +5,8 @@ use std::{fs, time::Instant};
 
 use hickory_filter::ruleset::{LiveRules, RuleSet};
 
+// Shared with the benchmark; it uses functions this example does not.
+#[allow(dead_code)]
 #[path = "../benches/workload.rs"]
 mod workload;
 
@@ -30,6 +32,8 @@ fn main() {
     let live = LiveRules::new(RuleSet::from_rules(workload::rules(names)).expect("build"));
     let build_time = started.elapsed();
     let steady = status_kib("VmRSS");
+    let build_peak = status_kib("VmHWM");
+    let index_bytes = live.load().name_index_bytes();
 
     // A refresh: build the replacement while the live set is still serving.
     let replacement = RuleSet::from_rules(workload::rules(names)).expect("build");
@@ -50,12 +54,20 @@ fn main() {
         mib(steady_delta)
     );
     println!(
+        "name index (FST):   {:.1} MiB",
+        index_bytes as f64 / (1024.0 * 1024.0)
+    );
+    println!(
         "per name:           {:.0} bytes",
         (steady_delta * 1024) as f64 / names as f64
     );
     println!(
         "during swap RSS:    {:.1} MiB (both sets live)",
         mib(during_swap)
+    );
+    println!(
+        "peak after 1st build: {:.1} MiB (VmHWM before the replacement)",
+        mib(build_peak)
     );
     println!("peak RSS (VmHWM):   {:.1} MiB", mib(peak));
     println!("after swap RSS:     {:.1} MiB", mib(after_swap));

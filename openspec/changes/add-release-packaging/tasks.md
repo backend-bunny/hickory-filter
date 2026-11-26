@@ -9,9 +9,9 @@
 
 ## 2. Static musl package (melange)
 
-- [ ] 2.1 Write `melange.yaml`: Alpine build environment per D1, `RUSTFLAGS=+crt-static`, the `*-alpine-linux-musl` target, `cargo auditable build --locked --release --offline`, installing `/usr/bin/hickory-filter`; verify `hack/build.sh` produces the APK offline (network disabled for the compile step)
-- [ ] 2.2 Implement `hack/build.sh` vendoring (committed files → temp dir → `cargo vendor --locked --versioned-dirs` → `--source-dir`) and the throwaway key flow; verify that after a build no private key exists in the workspace or temp dirs
-- [ ] 2.3 Add melange's test pipeline in a Wolfi environment: `--version` matches the package version, `readelf` shows no interpreter and no `NEEDED`; verify the test fails when `+crt-static` is removed
+- [x] 2.1 Write `melange.yaml`: Alpine build environment per D1, `RUSTFLAGS=+crt-static`, the `*-alpine-linux-musl` target, `cargo auditable build --locked --release --offline`, installing `/usr/bin/hickory-filter`; verify `hack/build.sh` produces the APK offline (network disabled for the compile step)
+- [x] 2.2 Implement `hack/build.sh` vendoring (committed files → temp dir → `cargo vendor --locked --versioned-dirs` → `--source-dir`) and the throwaway key flow; verify that after a build no private key exists in the workspace or temp dirs
+- [x] 2.3 Add melange's test pipeline in a Wolfi environment: `--version` matches the package version, `readelf` shows no interpreter and no `NEEDED`; verify the test fails when `+crt-static` is removed
 
 ## 3. Runtime image (apko)
 

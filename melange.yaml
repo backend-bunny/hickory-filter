@@ -1,0 +1,74 @@
+# Static musl build of hickory-filter. The build environment is Alpine (its
+# `rust` targets musl); the runtime image is assembled separately by apko from
+# Wolfi. Crates come from the vendored tree hack/build.sh puts in the source
+# directory, so compilation is offline and uses exactly Cargo.lock.
+package:
+  name: hickory-filter
+  version: 0.1.0 # x-release-please-version
+  epoch: 0
+  description: A filtering DNS forwarder with allow/block rules and scheduled blocklist refresh.
+  url: https://github.com/backend-bunny/hickory-filter
+  copyright:
+    - license: MIT OR Apache-2.0
+  # Statically linked: no shared-library or command dependencies are generated.
+  dependencies:
+    runtime: []
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - cargo
+      - cargo-auditable
+      - rust
+  environment:
+    # Static-pie executable; build scripts and proc macros stay host-dynamic.
+    RUSTFLAGS: -C target-feature=+crt-static
+
+pipeline:
+  - name: Build
+    runs: |
+      target="$(uname -m)-alpine-linux-musl"
+      export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/var/cache/melange/cargo-target}"
+      mkdir -p "$CARGO_TARGET_DIR"
+      cargo auditable build --locked --release --offline --target "$target"
+      install -Dm755 "$CARGO_TARGET_DIR/$target/release/hickory-filter" \
+        "${{targets.destdir}}/usr/bin/hickory-filter"
+      docdir="${{targets.destdir}}/usr/share/doc/hickory-filter"
+      mkdir -p "$docdir"
+      for f in LICENSE-MIT LICENSE-APACHE THIRD-PARTY-NOTICES.md; do
+        [ -f "$f" ] && install -m644 "$f" "$docdir/$f"
+      done
+      true
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://packages.wolfi.dev/os
+      keyring:
+        - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+      packages:
+        - binutils
+        - busybox
+  pipeline:
+    - name: Version matches the package
+      runs: |
+        out="$(hickory-filter --version)"
+        echo "$out"
+        case "$out" in *"${{package.version}}"*) ;; *) echo "version mismatch" >&2; exit 1 ;; esac
+    - name: Statically linked
+      runs: |
+        if readelf -l /usr/bin/hickory-filter | grep -q INTERP; then echo "has a program interpreter" >&2; exit 1; fi
+        if readelf -d /usr/bin/hickory-filter | grep -q NEEDED; then echo "has shared-library dependencies" >&2; exit 1; fi
+    - name: Check the configuration without a libc of its own
+      runs: |
+        printf 'upstreams = ["192.0.2.53"]\n' > /tmp/c.toml
+        hickory-filter --check --config /tmp/c.toml

@@ -11,13 +11,26 @@
 use std::{
     fmt, fs,
     path::{Path, PathBuf},
+    sync::Arc,
     time::SystemTime,
 };
 
 use crate::{
     config::{Config, Interval},
-    rules::{ListDecl, Rule, RuleError, RuleLine, parse_list, parse_rule_line},
+    rules::{ListDecl, ParsedList, Rule, RuleError, RuleLine, parse_list, parse_rule_line},
 };
+
+/// The outcome of loading one list, ready to apply to its state.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LoadResult {
+    /// New content, already parsed.
+    Loaded {
+        parsed: ParsedList,
+        validators: Validators,
+    },
+    NotModified,
+    Failed(String),
+}
 
 /// The default maximum size of one list, in bytes (64 MiB).
 pub const DEFAULT_MAX_LIST_BYTES: u64 = 64 * 1024 * 1024;
@@ -112,7 +125,8 @@ pub struct ListState {
     /// How often the list is refreshed; `0` disables refresh.
     pub refresh: Interval,
     /// The rules of the last successful load. Kept when a refresh fails.
-    pub rules: Vec<Rule>,
+    /// Shared, so a rule-set rebuild can take a cheap snapshot of every list.
+    pub rules: Arc<Vec<Rule>>,
     /// Lines skipped as invalid in the last successful load.
     pub skipped: usize,
     pub validators: Validators,
@@ -128,7 +142,7 @@ impl ListState {
             source,
             required,
             refresh,
-            rules: Vec::new(),
+            rules: Arc::new(Vec::new()),
             skipped: 0,
             validators: Validators::default(),
             last_success: None,
@@ -145,11 +159,42 @@ impl ListState {
     /// content. Invalid lines are skipped and counted, never failing the list.
     pub fn apply_load(&mut self, text: &str, validators: Validators, now: SystemTime) {
         let parsed = parse_list(self.decl.list_type, self.decl.action, text);
-        self.rules = parsed.rules;
+        self.rules = Arc::new(parsed.rules);
         self.skipped = parsed.skipped;
         self.validators = validators;
         self.last_success = Some(now);
         self.last_result = LastResult::Loaded;
+    }
+
+    /// Record the result of a load or refresh made off the owning task. Returns
+    /// true when the list's rules changed, so the caller knows a new rule set
+    /// is needed. A `304` with no previous copy is a failure.
+    pub fn apply(&mut self, result: LoadResult, now: SystemTime) -> bool {
+        match result {
+            LoadResult::Loaded { parsed, validators } => {
+                let changed = !self.has_loaded() || *self.rules != parsed.rules;
+                self.rules = Arc::new(parsed.rules);
+                self.skipped = parsed.skipped;
+                self.validators = validators;
+                self.last_success = Some(now);
+                self.last_result = LastResult::Loaded;
+                changed
+            }
+            LoadResult::NotModified => {
+                if self.has_loaded() {
+                    self.record_not_modified(now);
+                } else {
+                    self.record_failure(
+                        "304 Not Modified, but there is no previous copy".to_owned(),
+                    );
+                }
+                false
+            }
+            LoadResult::Failed(reason) => {
+                self.record_failure(reason);
+                false
+            }
+        }
     }
 
     /// The server said the content is unchanged: keep the rules, count the
@@ -181,7 +226,7 @@ impl ListState {
 /// Read a list file. A list over `max_bytes` fails; bytes that aren't valid
 /// UTF-8 become replacement characters, so their lines are skipped later
 /// instead of failing the list.
-fn read_list_file(path: &Path, max_bytes: u64) -> Result<String, String> {
+pub fn read_list_file(path: &Path, max_bytes: u64) -> Result<String, String> {
     let describe = |e: std::io::Error| format!("cannot read {}: {e}", path.display());
     let metadata = fs::metadata(path).map_err(describe)?;
     if metadata.len() > max_bytes {
@@ -271,6 +316,15 @@ impl ListSet {
             }
         }
         Ok(())
+    }
+
+    /// Every list's last good rules, shared: a snapshot a rule-set rebuild can
+    /// take without copying the rules.
+    pub fn snapshot(&self) -> Vec<Arc<Vec<Rule>>> {
+        self.lists
+            .iter()
+            .map(|list| Arc::clone(&list.rules))
+            .collect()
     }
 
     /// The rules of every list's last good content.

@@ -35,7 +35,7 @@
 ## 6. List sources and refresh
 
 - [x] 6.1 Implement `file://` loading and `ListState` (last good rules, skipped count, last success, last result); verify tests for an initial load, a required list missing (startup fails) and an optional list missing (starts, failure recorded)
-- [ ] 6.2 Implement HTTP(S) fetching with reqwest + rustls: timeout, streamed size cap, redirect policy, `ETag`/`If-Modified-Since`; verify tests against a local test HTTP server for 200, 304, 503, timeout, an oversized body and a redirect to http from https (rejected)
+- [x] 6.2 Implement HTTP(S) fetching with reqwest + rustls: timeout, streamed size cap, redirect policy, `ETag`/`If-Modified-Since`; verify tests against a local test HTTP server for 200, 304, 503, timeout, an oversized body and a redirect to http from https (rejected)
 - [ ] 6.3 Implement the bootstrap resolver as reqwest's DNS resolver backed by `hickory-resolver` (plain DNS and DoT), falling back to the system resolver; verify a test where list host resolution goes only to a local stub resolver
 - [ ] 6.4 Implement the refresher: per-list intervals, `0` disables, no overlapping cycles, bounded concurrency, one swap per cycle; verify tests with a paused tokio clock for the blocklist-sources "Scheduled refresh" and "Last good copy on failure" scenarios
 - [ ] 6.5 Implement the optional on-disk cache (content + validators per list, atomic file writes, nothing written without `cache_dir`); verify a test where a restart with the list server down serves the cached rules and becomes ready

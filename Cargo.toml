@@ -17,13 +17,14 @@ fst = "0.4.7"
 hickory-server = { version = "=0.26.4", features = ["resolver"] }
 humantime = "2.4.0"
 regex = "1.13.2"
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.2.3"
 
 [dev-dependencies]
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
 tempfile = "3.27.0"
-tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "time"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "time", "io-util"] }
 
 [[bench]]
 name = "lookup"

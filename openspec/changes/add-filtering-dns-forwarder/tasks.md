@@ -7,10 +7,10 @@
 
 ## 2. Configuration
 
-- [ ] 2.1 Define the TOML config types with `deny_unknown_fields` (listen, upstreams, http, filter: refresh, response, bootstrap, cache_dir, rules, lists) and load from `--config` with a documented default path; verify unit tests reject an unknown key, an unreadable file and an invalid duration with errors naming file/key
-- [ ] 2.2 Implement `--check` (parse + validate, no listeners, no fetches); verify an integration test where `--check` on a valid config exits 0 and opens no sockets
-- [ ] 2.3 Settle and implement the upstream/bootstrap address syntax (plain DNS and DNS-over-TLS with server name; IP-only for bootstrap); verify unit tests for valid forms and rejection of host names, then document the syntax in README.md and design.md D5
-- [ ] 2.4 Write an annotated example config `examples/hickory-filter.toml`; verify it passes `--check` in a test
+- [x] 2.1 Define the TOML config types with `deny_unknown_fields` (listen, upstreams, http, filter: refresh, response, bootstrap, cache_dir, rules, lists) and load from `--config` with a documented default path; verify unit tests reject an unknown key, an unreadable file and an invalid duration with errors naming file/key
+- [x] 2.2 Implement `--check` (parse + validate, no listeners, no fetches); verify an integration test where `--check` on a valid config exits 0 and opens no sockets
+- [x] 2.3 Settle and implement the upstream/bootstrap address syntax (plain DNS and DNS-over-TLS with server name; IP-only for bootstrap); verify unit tests for valid forms and rejection of host names, then document the syntax in README.md and design.md D5
+- [x] 2.4 Write an annotated example config `examples/hickory-filter.toml`; verify it passes `--check` in a test
 
 ## 3. Rule parsing
 

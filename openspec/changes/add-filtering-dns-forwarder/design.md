@@ -84,7 +84,8 @@ required = false
 ```
 `serde(deny_unknown_fields)` everywhere. Durations via `humantime`. Rule lines reuse the list-line parser, so inline and list syntax can't drift. `--check` runs parsing and validation only.
 - *Why:* TOML is strict and easy to validate. Rule lines keep rules readable and copyable. *Alternative:* fully structured rules (`{ action, type, value }`): verbose for long rule lists.
-- `upstreams`/`bootstrap` address syntax `scheme://ip[:port][#tls-name]` is a working proposal. The final spelling is settled in task 2.3 and documented there, without changing the spec's behaviour.
+- `upstreams`/`bootstrap` address syntax (settled in task 2.3): `[dns://]ip[:port]` for plain DNS (port 53) or `tls://ip[:port]#name` for DNS-over-TLS (port 853, certificate verified for `name`). IPv6 with a port is `[::1]:53`. `tls://` requires `#name`, `#name` is rejected on `dns://`, and host names are rejected for both, which is what keeps list fetches from resolving through ourselves. Documented in README.md.
+- Rule lines (`filter.rules`, `filter.lists[].rule`) are kept as text by the config types. The shared line parser (section 3) validates them, and `--check` runs it once it exists.
 
 ### D6. Parsing: per-type line parsers, skip-and-count
 One parser per list type returns `Option<Rule>` per line, and the caller counts the `None`s. Comment stripping happens first (`#` anywhere; `!` at the start of a wildcard-list line). Wildcard spellings normalise to a base name and must pass a DNS-name check. `hosts` splits on whitespace, requires exactly two fields with the first a valid IP, and keeps only the name. Regex lines compile individually during parsing, so a bad line is skipped and counted, never poisoning the whole `RegexSet`.

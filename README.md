@@ -76,6 +76,25 @@ A standalone binary using `hickory-server` as a library:
 - A refresh builds a complete new rule set off the query path and swaps it
   in atomically, so queries never see a half-loaded list.
 
+## Configuration
+
+One TOML file, `--config <file>` (default `/etc/hickory-filter/config.toml`).
+Unknown keys, invalid values and unreadable files stop startup with an error
+naming the file, the key and the reason. `--check` validates the file and
+exits without serving. See `examples/hickory-filter.toml` for every key.
+
+Upstream and bootstrap resolvers are IP addresses, never host names:
+
+| Form | Meaning |
+|---|---|
+| `192.0.2.53`, `dns://192.0.2.53` | plain DNS, port 53 |
+| `192.0.2.53:5353` | plain DNS, explicit port |
+| `tls://192.0.2.53#dns.example` | DNS-over-TLS, port 853, certificate verified for `dns.example` |
+| `tls://[2001:db8::53]:8853#dns.example` | DNS-over-TLS, IPv6, explicit port |
+
+`tls://` requires the `#name`. Refresh intervals take units (`"6h"`, `"90m"`);
+`0` disables.
+
 ## Memory (estimates, not measured)
 
 About 85–95 bytes per blocked domain, so roughly 90–110 MiB steady state for

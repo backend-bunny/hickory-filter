@@ -1,0 +1,52 @@
+# Example hickory-filter configuration. Every key shown here is optional
+# except `upstreams`. Check a file without serving: hickory-filter --check --config <file>
+#
+# Resolver syntax (upstreams and bootstrap): an IP address, never a host name.
+#   192.0.2.53                      plain DNS, port 53
+#   dns://192.0.2.53:5353           plain DNS, explicit port
+#   tls://192.0.2.53#dns.example    DNS-over-TLS, port 853, certificate verified
+#                                   for the name after '#'
+#   [2001:db8::53]:53               IPv6 with a port
+
+# DNS listen addresses, answered over UDP and TCP. Default: port 1053 on all
+# addresses, so the server runs unprivileged.
+listen = ["0.0.0.0:1053", "[::]:1053"]
+
+# Where queries that are not blocked are forwarded. At least one is required.
+upstreams = ["tls://192.0.2.53#dns.example", "192.0.2.54"]
+
+# Metrics, health and readiness. An address, or false to disable.
+http = "0.0.0.0:8080"
+
+[filter]
+# How often lists are reloaded. Units such as "6h" or "90m"; 0 disables.
+refresh = "24h"
+
+# Resolver used for list host names. Without it the system resolver is used.
+# Never this server itself.
+bootstrap = "tls://192.0.2.53#dns.example"
+
+# Optional on-disk copy of the last good list contents (must be writable).
+# cache_dir = "/var/cache/hickory-filter"
+
+# Inline rules, one per line: <block|allow> <domain|wildcard|regex> <value>.
+# Allow always wins over block.
+rules = [
+  "block wildcard *.ads.example",
+  "allow domain ok.ads.example",
+]
+
+# What a blocked query is answered with. mode is one of null (the default),
+# address, nodata or nxdomain. ttl is in seconds.
+[filter.response]
+mode = "null"
+ttl = 3600
+# mode = "address" also takes ipv4 and/or ipv6:
+# ipv4 = "192.0.2.1"
+# ipv6 = "2001:db8::1"
+
+# Remote and local lists: <block|allow> list <domain|hosts|wildcard|regex> <url>.
+[[filter.lists]]
+rule = "block list hosts https://lists.example/hosts.txt"
+refresh = "6h"      # overrides filter.refresh for this list
+required = false    # true: startup fails if this list cannot be loaded

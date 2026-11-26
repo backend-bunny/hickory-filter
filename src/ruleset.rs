@@ -14,7 +14,10 @@
 use std::{
     borrow::{Borrow, Cow},
     fmt,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use arc_swap::{ArcSwap, Guard};
@@ -318,12 +321,14 @@ fn normalize_query(name: &str) -> Cow<'_, str> {
 /// completely built replacement.
 pub struct LiveRules {
     current: ArcSwap<RuleSet>,
+    generation: AtomicU64,
 }
 
 impl LiveRules {
     pub fn new(initial: RuleSet) -> Self {
         Self {
             current: ArcSwap::from_pointee(initial),
+            generation: AtomicU64::new(0),
         }
     }
 
@@ -335,6 +340,12 @@ impl LiveRules {
     /// Replace the set atomically.
     pub fn swap(&self, new: RuleSet) {
         self.current.store(Arc::new(new));
+        self.generation.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// How many times the set has been replaced.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::Relaxed)
     }
 }
 

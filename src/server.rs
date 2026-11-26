@@ -6,21 +6,31 @@
 //! stops accepting queries, lets the ones in flight finish for a bounded grace
 //! period, and stops the refresher.
 
-use std::{fmt, io, net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    fmt, io,
+    net::SocketAddr,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 use hickory_server::Server;
 use socket2::{Domain, Protocol, Socket, Type};
 use tokio::{
     net::{TcpListener, UdpSocket},
+    sync::watch,
     task::JoinHandle,
 };
 
 use crate::{
     cache::CachedLoader,
-    config::Config,
+    config::{Config, Http},
     fetch::{FetchError, FetchOutcome, Fetcher},
     filter_handler::FilterHandler,
     forwarder::{ForwarderError, build_catalog},
+    http::{self, Endpoint},
     lists::{RequiredListError, Source, Validators},
     refresh::{DefaultLoader, ListLoader, Refresher},
     rules::RuleError,
@@ -237,6 +247,8 @@ impl ListLoader for ConfiguredLoader {
 pub struct Running {
     server: Server<FilterHandler>,
     refresher: JoinHandle<()>,
+    http: Option<HttpTask>,
+    ready: Arc<AtomicBool>,
     addrs: Vec<SocketAddr>,
     skipped: Vec<(SocketAddr, String)>,
     live: Arc<LiveRules>,
@@ -258,11 +270,27 @@ impl Running {
         &self.live
     }
 
+    /// The HTTP endpoint's address, when it is enabled.
+    pub fn http_addr(&self) -> Option<SocketAddr> {
+        self.http.as_ref().map(|http| http.addr)
+    }
+
+    /// Whether `/ready` answers 200.
+    pub fn is_ready(&self) -> bool {
+        self.ready.load(Ordering::Acquire)
+    }
+
     /// Stop accepting queries, give the ones in flight up to `grace` to finish,
-    /// and stop the refresher. Returns whether everything finished in time.
+    /// and stop the refresher and the HTTP endpoint. Returns whether everything
+    /// finished in time.
     pub async fn shutdown(mut self, grace: Duration) -> bool {
+        self.ready.store(false, Ordering::Release);
         self.server.shutdown_token().cancel();
+        let http = self.http.take();
         let finished = tokio::time::timeout(grace, async {
+            if let Some(http) = http {
+                http.stop().await;
+            }
             let _ = self.server.block_until_done().await;
             let _ = (&mut self.refresher).await;
         })
@@ -275,13 +303,59 @@ impl Running {
     }
 }
 
-/// Start serving: bind, load every list, then answer queries and keep the
-/// lists fresh. Fails closed: a bind error or a `required` list that can't be
-/// loaded stops startup.
-pub async fn start(config: &Config) -> Result<Running, StartError> {
-    // Bind first so a bad address fails before any list is fetched.
-    let listeners = bind(&config.listen)?;
+/// The running HTTP endpoint.
+struct HttpTask {
+    handle: JoinHandle<()>,
+    stop: watch::Sender<bool>,
+    addr: SocketAddr,
+}
 
+impl HttpTask {
+    async fn stop(self) {
+        let _ = self.stop.send(true);
+        let _ = self.handle.await;
+    }
+}
+
+/// Bind and start the HTTP endpoint, if it is enabled. It starts before the
+/// lists are loaded, so `/health` answers and `/ready` says 503 meanwhile.
+async fn start_http(
+    config: &Config,
+    ready: &Arc<AtomicBool>,
+) -> Result<Option<HttpTask>, BindError> {
+    let Http::Listen(address) = config.http else {
+        return Ok(None);
+    };
+    let bind_error = |source| BindError {
+        address,
+        protocol: "http",
+        source,
+    };
+    let listener = TcpListener::bind(address).await.map_err(bind_error)?;
+    let addr = listener.local_addr().map_err(bind_error)?;
+    let (stop, mut stopped) = watch::channel(false);
+    // No metrics are recorded yet: an empty exposition is valid.
+    let endpoint = Arc::new(Endpoint::new(Arc::clone(ready), Arc::new(String::new)));
+    let handle = tokio::spawn(http::serve(listener, endpoint, async move {
+        let _ = stopped.changed().await;
+    }));
+    Ok(Some(HttpTask { handle, stop, addr }))
+}
+
+/// Load every list and start answering DNS on the bound sockets.
+async fn serve_dns(
+    config: &Config,
+    listeners: Listeners,
+) -> Result<
+    (
+        Server<FilterHandler>,
+        JoinHandle<()>,
+        Vec<SocketAddr>,
+        Vec<(SocketAddr, String)>,
+        Arc<LiveRules>,
+    ),
+    StartError,
+> {
     let live = Arc::new(LiveRules::new(RuleSet::default()));
     let fetcher = Fetcher::from_config(config)?;
     let loader = Arc::new(ConfiguredLoader::new(config, fetcher));
@@ -300,11 +374,37 @@ pub async fn start(config: &Config) -> Result<Running, StartError> {
 
     let token = server.shutdown_token().clone();
     let refresher = tokio::spawn(refresher.run(async move { token.cancelled().await }));
-    Ok(Running {
-        server,
-        refresher,
-        addrs: listeners.addrs,
-        skipped: listeners.skipped,
-        live,
-    })
+    Ok((server, refresher, listeners.addrs, listeners.skipped, live))
+}
+
+/// Start serving: bind, load every list, then answer queries and keep the
+/// lists fresh. Fails closed: a bind error or a `required` list that can't be
+/// loaded stops startup. The HTTP endpoint comes up first and reports ready
+/// once the lists are loaded and the DNS listeners are serving.
+pub async fn start(config: &Config) -> Result<Running, StartError> {
+    // Bind first so a bad address fails before any list is fetched.
+    let listeners = bind(&config.listen)?;
+    let ready = Arc::new(AtomicBool::new(false));
+    let http = start_http(config, &ready).await?;
+
+    match serve_dns(config, listeners).await {
+        Ok((server, refresher, addrs, skipped, live)) => {
+            ready.store(true, Ordering::Release);
+            Ok(Running {
+                server,
+                refresher,
+                http,
+                ready,
+                addrs,
+                skipped,
+                live,
+            })
+        }
+        Err(error) => {
+            if let Some(http) = http {
+                http.stop().await;
+            }
+            Err(error)
+        }
+    }
 }

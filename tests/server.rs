@@ -28,11 +28,12 @@ mod common;
 use common::{ok, serve};
 
 /// A config listening on `listen` with an upstream nothing answers (these
-/// tests only use names the filter answers itself).
+/// tests only use names the filter answers itself), and no HTTP endpoint (its
+/// default port would clash between tests running at the same time).
 fn config(listen: &str, rest: &str) -> Config {
     Config::parse(
         Path::new("test.toml"),
-        &format!("listen = [{listen}]\nupstreams = [\"127.0.0.1:9\"]\n{rest}\n"),
+        &format!("listen = [{listen}]\nupstreams = [\"127.0.0.1:9\"]\nhttp = false\n{rest}\n"),
     )
     .expect("config")
 }

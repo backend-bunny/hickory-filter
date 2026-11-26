@@ -124,6 +124,9 @@ async fn serve(config: &Config) -> ExitCode {
     };
     let addrs: Vec<String> = running.addrs().iter().map(ToString::to_string).collect();
     eprintln!("{} listening on {}", version_line(), addrs.join(", "));
+    if let Some(addr) = running.http_addr() {
+        eprintln!("http endpoint on {addr} (/health, /ready, /metrics)");
+    }
     for (address, reason) in running.skipped() {
         eprintln!("note: not listening on {address}: {reason}");
     }

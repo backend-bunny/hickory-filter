@@ -21,7 +21,7 @@ echo "== vendor crates (locked)"
 
 echo "== third-party notices (from the vendored tree this build compiles)"
 # musl's version comes from the Alpine repository the build environment uses.
-repo="$(sed -n 's#^ *- \(https://[^ ]*/main\)$#\1#p' "$ROOT/melange.yaml" | head -1)"
+repo="$(sed -n 's#^ *- \(http[s]*:[/][/][^ ]*/main\)$#\1#p' "$ROOT/melange.yaml" | head -1)"
 musl_version="$(curl -sf "$repo/$ARCH/APKINDEX.tar.gz" | tar -xzO APKINDEX \
   | awk -v RS= '/\nP:musl\n/ { n = split($0, l, "\n"); for (i = 1; i <= n; i++) if (l[i] ~ /^V:/) print substr(l[i], 3) }')"
 [ -n "$musl_version" ] || die "could not find the musl version in the build environment's repository"

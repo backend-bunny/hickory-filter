@@ -1,6 +1,7 @@
 //! hickory-filter: a filtering DNS forwarder.
 
 pub mod blocked;
+pub mod bootstrap;
 pub mod config;
 pub mod fetch;
 pub mod filter_handler;

@@ -1,0 +1,111 @@
+# Default values for hickory-filter. values.schema.json rejects unknown keys.
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/backend-bunny/hickory-filter
+  # Overrides the tag when set. A released chart has it filled in with the
+  # digest published in the same release.
+  digest: ""
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podLabels: {}
+podAnnotations: {}
+
+# The hickory-filter configuration, rendered as TOML into a ConfigMap. Keys are
+# those of the configuration file (see the example configuration). The server
+# listens on port 1053 in the container; keep `listen` unset or on that port.
+config:
+  upstreams:
+    - 1.1.1.1
+    - 9.9.9.9
+  http: 0.0.0.0:8080
+  log:
+    format: json
+
+# Use a ConfigMap you manage instead of `config`. It needs the key below.
+# `config.http` must still match the HTTP address in that file, because the
+# probes and monitors take their port from it.
+existingConfigMap: ""
+existingConfigMapKey: config.toml
+
+# Optional on-disk copy of the last good list contents. The chart mounts the
+# volume and points `filter.cache_dir` at it.
+cache:
+  enabled: false
+  mountPath: /var/cache/hickory-filter
+  # Use an existing PersistentVolumeClaim; an emptyDir otherwise.
+  existingClaim: ""
+  sizeLimit: ""
+
+service:
+  type: ClusterIP
+  port: 53
+  annotations: {}
+
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+priorityClassName: ""
+
+podDisruptionBudget:
+  enabled: false
+  maxUnavailable: 1
+
+networkPolicy:
+  enabled: false
+  # Peers allowed to reach DNS and the HTTP port; empty allows any source.
+  dnsFrom: []
+  metricsFrom: []
+
+# Scrape through the pod template annotations; the port comes from config.http.
+# An alternative to the monitors below: do not enable both.
+scrapeAnnotations:
+  enabled: false
+
+serviceMonitor:
+  enabled: false
+  interval: ""
+  scrapeTimeout: ""
+  labels: {}
+  relabelings: []
+  metricRelabelings: []
+
+podMonitor:
+  enabled: false
+  interval: ""
+  scrapeTimeout: ""
+  labels: {}
+  relabelings: []
+  metricRelabelings: []
+
+# The dashboard in dashboards/, for the Grafana operator.
+grafanaDashboard:
+  enabled: false
+  # Required when enabled: labels of the Grafana instance(s) to load it into.
+  instanceSelector: {}
+  folder: ""
+  resyncPeriod: ""
+  allowCrossNamespaceImport: false
+  labels: {}
+
+# The dashboard as a labelled ConfigMap, for the Grafana sidecar loader.
+dashboardConfigMap:
+  enabled: false
+  namespace: ""
+  labels:
+    grafana_dashboard: "1"
+  annotations: {}

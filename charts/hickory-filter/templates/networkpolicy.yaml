@@ -1,0 +1,30 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $port := include "hickory-filter.httpPort" . }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hickory-filter.fullname" . }}
+  labels:
+    {{- include "hickory-filter.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hickory-filter.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - {port: 1053, protocol: UDP}
+        - {port: 1053, protocol: TCP}
+      {{- with .Values.networkPolicy.dnsFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- if $port }}
+    - ports:
+        - {port: {{ $port }}, protocol: TCP}
+      {{- with .Values.networkPolicy.metricsFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "replicaCount": {"type": "integer", "minimum": 0},
+    "image": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "digest": {"type": "string", "pattern": "^(sha256:[0-9a-f]{64})?$"},
+        "tag": {"type": "string"},
+        "pullPolicy": {"enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "imagePullSecrets": {"type": "array", "items": {"type": "object"}},
+    "nameOverride": {"type": "string"},
+    "fullnameOverride": {"type": "string"},
+    "serviceAccount": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "create": {"type": "boolean"}, "name": {"type": "string"},
+        "annotations": {"type": "object"}
+      }
+    },
+    "podLabels": {"type": "object", "additionalProperties": {"type": "string"}},
+    "podAnnotations": {"type": "object", "additionalProperties": {"type": "string"}},
+    "config": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "listen": {"type": "array", "items": {"type": "string"}},
+        "upstreams": {"type": "array", "items": {"type": "string"}},
+        "cache_size": {"type": "integer", "minimum": 0},
+        "http": {"type": ["string", "boolean"]},
+        "log": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "level": {"enum": ["error", "warn", "info", "debug", "trace"]},
+            "format": {"enum": ["text", "json"]},
+            "query_log": {"type": "boolean"},
+            "query_log_client": {"enum": ["address", "masked", "omit"]}
+          }
+        },
+        "filter": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "refresh": {"type": ["string", "integer"]},
+            "bootstrap": {"type": "string"},
+            "cache_dir": {"type": "string"},
+            "rules": {"type": "array", "items": {"type": "string"}},
+            "response": {"type": "object"},
+            "lists": {
+              "type": "array",
+              "items": {
+                "type": "object", "additionalProperties": false, "required": ["rule"],
+                "properties": {
+                  "rule": {"type": "string"},
+                  "refresh": {"type": ["string", "integer"]},
+                  "required": {"type": "boolean"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "existingConfigMap": {"type": "string"},
+    "existingConfigMapKey": {"type": "string", "minLength": 1},
+    "cache": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "mountPath": {"type": "string", "pattern": "^/"},
+        "existingClaim": {"type": "string"},
+        "sizeLimit": {"type": "string"}
+      }
+    },
+    "service": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "type": {"enum": ["ClusterIP", "NodePort", "LoadBalancer"]},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "annotations": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
+    },
+    "resources": {"type": "object"},
+    "nodeSelector": {"type": "object"},
+    "tolerations": {"type": "array"},
+    "affinity": {"type": "object"},
+    "topologySpreadConstraints": {"type": "array"},
+    "priorityClassName": {"type": "string"},
+    "podDisruptionBudget": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"enabled": {"type": "boolean"}, "maxUnavailable": {"type": ["integer", "string"]}}
+    },
+    "networkPolicy": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "dnsFrom": {"type": "array"}, "metricsFrom": {"type": "array"}
+      }
+    },
+    "scrapeAnnotations": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"enabled": {"type": "boolean"}}
+    },
+    "serviceMonitor": {"$ref": "#/definitions/monitor"},
+    "podMonitor": {"$ref": "#/definitions/monitor"},
+    "grafanaDashboard": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "instanceSelector": {"type": "object"},
+        "folder": {"type": "string"},
+        "resyncPeriod": {"type": "string"},
+        "allowCrossNamespaceImport": {"type": "boolean"},
+        "labels": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
+    },
+    "dashboardConfigMap": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "namespace": {"type": "string"},
+        "labels": {"type": "object", "additionalProperties": {"type": "string"}},
+        "annotations": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
+    }
+  },
+  "definitions": {
+    "monitor": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "interval": {"type": "string"},
+        "scrapeTimeout": {"type": "string"},
+        "labels": {"type": "object", "additionalProperties": {"type": "string"}},
+        "relabelings": {"type": "array"},
+        "metricRelabelings": {"type": "array"}
+      }
+    }
+  }
+}

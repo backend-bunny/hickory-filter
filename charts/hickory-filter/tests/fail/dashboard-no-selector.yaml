@@ -1,0 +1,2 @@
+# expect: instanceSelector is required
+grafanaDashboard: {enabled: true}

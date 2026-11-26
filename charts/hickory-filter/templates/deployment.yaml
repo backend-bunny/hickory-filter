@@ -1,0 +1,140 @@
+{{- $port := include "hickory-filter.httpPort" . }}
+{{- if .Values.scrapeAnnotations.enabled }}{{ include "hickory-filter.requireHttp" (dict "feature" "scrapeAnnotations" "Values" .Values) }}{{ end }}
+{{- $scrape := dict }}
+{{- if .Values.scrapeAnnotations.enabled }}
+{{- $scrape = dict "prometheus.io/scrape" "true" "prometheus.io/port" $port "prometheus.io/path" "/metrics" }}
+{{- end }}
+{{- $annotations := mergeOverwrite (dict) $scrape .Values.podAnnotations }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hickory-filter.fullname" . }}
+  labels:
+    {{- include "hickory-filter.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "hickory-filter.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- if not .Values.existingConfigMap }}
+        checksum/config: {{ include "hickory-filter.config" . | sha256sum }}
+        {{- end }}
+        {{- with $annotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "hickory-filter.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "hickory-filter.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: hickory-filter
+          image: {{ include "hickory-filter.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["--config", "/etc/hickory-filter/config.toml"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: dns-udp
+              containerPort: 1053
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: 1053
+              protocol: TCP
+            {{- if $port }}
+            - name: http
+              containerPort: {{ $port }}
+              protocol: TCP
+            {{- end }}
+          {{- if $port }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+          {{- else }}
+          livenessProbe:
+            tcpSocket:
+              port: dns-tcp
+          readinessProbe:
+            tcpSocket:
+              port: dns-tcp
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/hickory-filter
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.cache.enabled }}
+            - name: cache
+              mountPath: {{ .Values.cache.mountPath }}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "hickory-filter.configName" . }}
+            items:
+              - key: {{ .Values.existingConfigMapKey }}
+                path: config.toml
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.cache.enabled }}
+        - name: cache
+          {{- if .Values.cache.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.cache.existingClaim }}
+          {{- else }}
+          emptyDir:
+            {{- with .Values.cache.sizeLimit }}
+            sizeLimit: {{ . }}
+            {{- else }} {}
+            {{- end }}
+          {{- end }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

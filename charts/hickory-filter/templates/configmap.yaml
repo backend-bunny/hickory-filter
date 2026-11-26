@@ -1,0 +1,11 @@
+{{- if not .Values.existingConfigMap }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hickory-filter.fullname" . }}
+  labels:
+    {{- include "hickory-filter.labels" . | nindent 4 }}
+data:
+  {{ .Values.existingConfigMapKey }}: |
+    {{- include "hickory-filter.config" . | nindent 4 }}
+{{- end }}

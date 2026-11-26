@@ -62,5 +62,22 @@ apko build apko.yaml "hickory-filter:$version" "$ROOT/out/image.tar" \
   --cache-dir "$ROOT/.cache/apko"
 ls -l "$ROOT/out"
 
+# hack/publish.sh sets PUBLISH_TAGS (space-separated image references): push the
+# same image under those tags and record the digest of the index they point to.
+if [ -n "${PUBLISH_TAGS:-}" ]; then
+  echo "== apko publish ($PUBLISH_TAGS)"
+  # shellcheck disable=SC2086
+  published="$(apko publish apko.yaml $PUBLISH_TAGS \
+    --arch "$ARCH" \
+    --lockfile "$work/apko.lock.json" \
+    --keyring-append "$work/melange.rsa.pub" \
+    --sbom-path "$ROOT/out" \
+    --cache-dir "$ROOT/.cache/apko" | tail -1)"
+  digest="sha256:${published##*sha256:}"
+  [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || die "apko publish printed no image digest: $published"
+  echo "$digest" > "$ROOT/out/image.digest"
+  echo "published $digest"
+fi
+
 if [ -n "${KEEP_PUBLIC_KEY:-}" ]; then cp "$work/melange.rsa.pub" "$KEEP_PUBLIC_KEY"; fi
 # The private key lives only in $work, which the trap removes.

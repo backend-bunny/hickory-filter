@@ -13,7 +13,7 @@ A network-wide ad and tracker blocker has to do more than block a fixed set of n
 - Bootstrap resolver (plain DNS or DNS-over-TLS) used only to resolve list hosts.
 - Response modes for blocked names: `null` (default), `address`, `nodata`, `nxdomain`, each correct for the query type.
 - Operations: Prometheus metrics, `/health`, and a `/ready` endpoint that is ready only after the first rule load.
-- Configuration in one TOML file. Rules are written as lines (`block wildcard *.x`) inside it. This is an assumption to confirm in review (see AGENTS.md, open decisions).
+- Configuration in one TOML file. Rules are written as lines (`block wildcard *.x`) inside it.
 
 ## Capabilities
 

@@ -69,14 +69,15 @@ in `openspec/changes/`. Use the `openspec-*` skills (`.claude/skills/` →
 - **Lockfiles change only by review:** `Cargo.lock` and `apko.lock.json` are
   committed. Builds use `--locked` / `--lockfile`, and nothing relocks
   silently in CI.
+- **License: `MIT OR Apache-2.0`.** Keep `LICENSE-MIT` and `LICENSE-APACHE`
+  and the SPDX expression in `Cargo.toml` and the image annotation in step.
+- **Config is one TOML file** (`serde`, `deny_unknown_fields`), with rules
+  written as lines (`block wildcard *.x`) inside it.
 - Don't name private consumers, clusters or networks in this repo's docs.
 
 ## Open decisions
 
 Record the answer in the relevant spec/design, then remove it here.
 
-1. **License:** proposed `MIT OR Apache-2.0`.
-2. **Config format:** proposed TOML for the server, with rules written as
-   lines (`block wildcard *.x`) inside it.
-3. **Rule storage:** hash sets first; a reversed-domain FST later if
+1. **Rule storage:** hash sets first; a reversed-domain FST later if
    benchmarks justify it.

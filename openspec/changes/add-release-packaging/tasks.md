@@ -23,7 +23,7 @@
 
 - [ ] 4.1 Add `deny.toml` with the license allowlist and a `cargo deny check licenses` step in CI; verify CI fails on a scratch dependency licensed GPL-3.0-only
 - [ ] 4.2 Implement `hack/notices.py` per D5 (normal deps on the musl target, license and notice files from the vendored tree, pinned SPDX fallback texts, musl entry, reviewed-exception list) writing `notices.json` and `THIRD-PARTY-NOTICES.md`; verify unit tests for a crate with NOTICE, a crate with no file (canonical fallback), a build-only crate (excluded) and a crate with nothing (fails)
-- [ ] 4.3 Ship `THIRD-PARTY-NOTICES.md` and `LICENSE` in `/usr/share/doc/hickory-filter/` via the melange source dir; verify a test comparing the crate set in the image's notices, `notices.json` and the binary's cargo-auditable data
+- [ ] 4.3 Ship `THIRD-PARTY-NOTICES.md`, `LICENSE-MIT` and `LICENSE-APACHE` in `/usr/share/doc/hickory-filter/` via the melange source dir; verify a test comparing the crate set in the image's notices, `notices.json` and the binary's cargo-auditable data
 
 ## 5. Helm chart
 

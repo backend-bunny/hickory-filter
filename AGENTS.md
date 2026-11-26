@@ -16,9 +16,11 @@ in `openspec/changes/`. Use the `openspec-*` skills (`.claude/skills/` →
 
 - **Self-contained docs.** Nothing in this repo (README, AGENTS.md, specs,
   designs, comments, commit messages) references other projects, products or
-  repositories. The only exceptions are the libraries the code depends on
-  and the build tools and base distributions the packaging uses, named where
-  they are used. Describe formats by their syntax (`||x^`,
+  repositories. The only exceptions are the libraries the code depends on,
+  the build tools and base distributions the packaging uses, and the
+  monitoring formats and APIs the integrations speak (Prometheus metrics and
+  operator resources, Loki log queries, Grafana dashboards), each named where
+  it is used. Describe formats by their syntax (`||x^`,
   `address=/x/#`), not by the tools they come from.
 - **Library, not fork.** Use `hickory-server`'s public API (`RequestHandler`,
   `Catalog`, `ForwardZoneHandler`, `Server`). If something we need isn't

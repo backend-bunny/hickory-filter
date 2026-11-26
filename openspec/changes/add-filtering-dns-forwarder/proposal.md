@@ -12,7 +12,7 @@ A network-wide ad and tracker blocker has to do more than block a fixed set of n
 - Scheduled refresh of lists, with conditional requests, keeping the last good copy on failure (optionally persisted on disk) and an atomic swap of the rule set.
 - Bootstrap resolver (plain DNS or DNS-over-TLS) used only to resolve list hosts.
 - Response modes for blocked names: `null` (default), `address`, `nodata`, `nxdomain`, each correct for the query type.
-- Operations: Prometheus metrics, `/health`, and a `/ready` endpoint that is ready only after the first rule load.
+- Operations: Prometheus metrics (aggregates only, with bounded labels and no client or name labels), `/health`, a `/ready` endpoint that is ready only after the first rule load, structured logs, and an opt-in query log that a log collector can turn into per-client and per-name views.
 - Configuration in one TOML file. Rules are written as lines (`block wildcard *.x`) inside it.
 
 ## Capabilities

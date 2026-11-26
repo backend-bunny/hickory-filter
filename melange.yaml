@@ -44,9 +44,8 @@ pipeline:
       docdir="${{targets.destdir}}/usr/share/doc/hickory-filter"
       mkdir -p "$docdir"
       for f in LICENSE-MIT LICENSE-APACHE THIRD-PARTY-NOTICES.md; do
-        [ -f "$f" ] && install -m644 "$f" "$docdir/$f"
+        install -m644 "$f" "$docdir/$f"
       done
-      true
 
 test:
   environment:

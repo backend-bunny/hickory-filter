@@ -7,10 +7,14 @@ planned architecture.
 
 ## Status
 
-Design phase. **Don't write implementation code until the user asks for it.**
-Work happens through OpenSpec: the specs in `openspec/specs/` and the changes
-in `openspec/changes/`. Use the `openspec-*` skills (`.claude/skills/` →
-`.agents/skills/`): propose, explore, update, apply, archive.
+The DNS server is implemented and its specs are in `openspec/specs/`
+(`dns-forwarding`, `filter-rules`, `blocklist-sources`, `blocked-responses`,
+`observability`). Still planned, as changes in `openspec/changes/`:
+`add-release-packaging` (image, Helm chart, release workflows) and
+`add-grafana-dashboard`. Work happens through OpenSpec: implement agreed
+changes, and don't expand scope without the user. Use the `openspec-*` skills
+(`.claude/skills/` → `.agents/skills/`): propose, explore, update, apply,
+archive.
 
 ## Hard rules
 

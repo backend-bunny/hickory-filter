@@ -20,8 +20,8 @@
 
 ## 4. Rule set and matching
 
-- [ ] 4.1 Implement `RuleSet` (exact, suffix and `RegexSet` for allow and block) with matching in the order allow → block, exact → suffix → regex; verify tests for every filter-rules matching scenario, including allow inside a blocked wildcard and allow-list over `block regex .*`
-- [ ] 4.2 Put the live `RuleSet` in an `ArcSwap` and build it from inline rules plus each list's current content; verify a concurrency test where readers running during repeated swaps only ever see a complete old or new set
+- [x] 4.1 Implement `RuleSet` (exact, suffix and `RegexSet` for allow and block) with matching in the order allow → block, exact → suffix → regex; verify tests for every filter-rules matching scenario, including allow inside a blocked wildcard and allow-list over `block regex .*`
+- [x] 4.2 Put the live `RuleSet` in an `ArcSwap` and build it from inline rules plus each list's current content; verify a concurrency test where readers running during repeated swaps only ever see a complete old or new set
 - [ ] 4.3 Add a micro-benchmark (criterion) for lookups against a 1M-name generated set, and an RSS measurement for steady state and during a swap; verify the benchmark runs and record the numbers in README.md under Memory
 
 ## 5. Blocked responses

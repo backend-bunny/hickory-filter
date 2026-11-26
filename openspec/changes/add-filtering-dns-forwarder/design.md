@@ -94,7 +94,7 @@ One parser per list type returns `Option<Rule>` per line, and the caller counts 
 The `metrics` facade with `metrics-exporter-prometheus`. `/health`, `/ready` and `/metrics` are served by a minimal `hyper` service on its own listener. Readiness is an `AtomicBool`, set after the first rule set is stored and the listeners are bound. Logging uses `tracing` + `tracing-subscriber` (text or JSON, `RUST_LOG`-style level). List URLs are passed through a credential-stripping display helper before being logged or used as labels.
 
 ### D8. Memory: hash sets now, FST later behind the same interface
-`RuleSet` matching sits behind a small internal trait (`contains_exact`, `matches_suffix`). A later change can swap in reversed-domain FSTs without touching parsing, refresh or the handler. Benchmark first: build a 1M-name list, then measure RSS steady and during a swap.
+`RuleSet` matching sits behind a small internal trait (`contains_exact`, `matches_suffix`). (Implemented as `NameIndex` in `src/ruleset.rs`; queries are normalised leniently there, lower case and one trailing dot, without the rule parser's name validation, so unusual query names still match by case and never panic.) A later change can swap in reversed-domain FSTs without touching parsing, refresh or the handler. Benchmark first: build a 1M-name list, then measure RSS steady and during a swap.
 
 ## Risks / Trade-offs
 

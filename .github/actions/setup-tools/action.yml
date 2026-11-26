@@ -6,6 +6,14 @@ runs:
     - uses: jetify-com/devbox-install-action@05e954310554b6122a26b4880d69937f61b1eb2e # v0.16.0
       with:
         enable-cache: true
+    # Ubuntu's AppArmor denies unprivileged user namespaces except to
+    # binaries with a profile; the nix-installed bubblewrap has none. The
+    # runner VM is ephemeral, so lifting the restriction is scoped to the job.
+    - name: Allow unprivileged user namespaces (melange bubblewrap)
+      shell: bash
+      run: |
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+        devbox run -- bwrap --unshare-user --bind / / true
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |

@@ -38,6 +38,7 @@ jobs:
         with:
           persist-credentials: false
       - run: hack/check-policy.sh
+      - run: python3 -I -m unittest discover -s hack
 
   rust:
     runs-on: ubuntu-latest
@@ -59,10 +60,20 @@ jobs:
       - run: devbox run -- hack/chart-test.sh
       - run: DRY_RUN=1 devbox run -- hack/chart-publish.sh
 
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-tools
+      - run: devbox run -- hack/build.sh
+      - run: devbox run -- hack/test.sh
+
   # The single required check: fails unless every other job succeeded.
   ci-ok:
     if: always()
-    needs: [conventional-commits, policy, rust, chart]
+    needs: [conventional-commits, policy, rust, chart, package]
     runs-on: ubuntu-latest
     steps:
       - env:

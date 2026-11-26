@@ -18,9 +18,10 @@ if [ -d .github ]; then
 fi
 
 # 2. Link hosts. Add a host here only when the repo depends on that service.
+#    The Wolfi package repository is the runtime base distribution.
 #    The CRD schema catalog is where chart validation gets the schemas of the
 #    Prometheus Operator resources. Documentation address ranges and example names are fine in examples.
-ALLOWED_HOSTS='^(raw\.githubusercontent\.com/datreeio/CRDs-catalog/.*|github\.com/backend-bunny/hickory-filter|ghcr\.io/backend-bunny(/.*)?|(.+\.)?example(\.[a-z]+)?|localhost|127\.0\.0\.1|(192\.0\.2|198\.51\.100|203\.0\.113)\.[0-9]+)$'
+ALLOWED_HOSTS='^(packages\.wolfi\.dev(/.*)?|raw\.githubusercontent\.com/datreeio/CRDs-catalog/.*|github\.com/backend-bunny/hickory-filter|ghcr\.io/backend-bunny(/.*)?|(.+\.)?example(\.[a-z]+)?|localhost|127\.0\.0\.1|(192\.0\.2|198\.51\.100|203\.0\.113)\.[0-9]+)$'
 while IFS=: read -r file lineno url; do
   host_path="${url#*://}"
   host_path="${host_path%%[\"\'\`) >,;]*}"

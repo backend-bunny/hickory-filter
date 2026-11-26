@@ -56,7 +56,7 @@
 ## 9. Integration
 
 - [x] 9.1 End-to-end test: run the binary with the example config against a local stub upstream and a local list server, exercising one scenario from each capability over the wire; verify it passes in `cargo test`
-- [ ] 9.2 Run the binary as an unprivileged user, with no capabilities, on a read-only root filesystem (e.g. `unshare`/`bwrap`, no container build in this repo); verify it serves queries and writes nothing outside `cache_dir`
+- [x] 9.2 Run the binary as an unprivileged user, with no capabilities, on a read-only root filesystem (e.g. `unshare`/`bwrap`, no container build in this repo); verify it serves queries and writes nothing outside `cache_dir`
 - [ ] 9.3 Update README.md from "planned" to the implemented behaviour, with config reference and examples; verify every config key in the README exists in the example config and passes `--check`
 
 ## Workflow follow-up

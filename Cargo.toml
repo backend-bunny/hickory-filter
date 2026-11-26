@@ -9,3 +9,10 @@ publish = false
 
 [lints.rust]
 unsafe_code = "forbid"
+
+[dependencies]
+async-trait = "0.1.92"
+hickory-server = { version = "=0.26.4", features = ["resolver"] }
+
+[dev-dependencies]
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "time"] }

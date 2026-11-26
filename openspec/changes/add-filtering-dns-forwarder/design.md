@@ -28,6 +28,12 @@ See proposal.md for the motivation and specs/ for the required behaviour. Constr
 - *Why:* blocked-responses needs exact control of the rcode, the AA flag and the SOA in the authority section. Doing it at request level makes that a matter of message construction, not of how `Catalog` maps zone-handler errors. It also guarantees filtering happens before the forwarder's cache (dns-forwarding, Response cache).
 - *Alternative:* a `ZoneHandler` chained before the forwarder in `Catalog::upsert(".", vec![filter, forwarder])`, returning `LookupControlFlow::Skip` when not blocked. Simpler wiring, but NXDOMAIN-with-SOA and the AA flag depend on catalog internals. It stays the fallback if the spike (task 1.2) shows the request-level API is impractical in the pinned release.
 - *Pin:* the latest `hickory-server` release (v0.26.x at time of writing), exact version, with `Cargo.lock` committed.
+- *Spike outcome (task 1.2, `hickory-server` 0.26.4):* the request-level approach works and stays. `FilterHandler` implements `RequestHandler` and wraps a `Catalog` holding a `ForwardZoneHandler` on `.`. `tests/wire.rs` runs a real server on loopback and checks, over UDP, that a blocked name gets NXDOMAIN with AA set and an SOA in the authority section and no answers, and that any other name is forwarded to a stub upstream. Findings:
+  - `MessageResponseBuilder::build` takes the SOA as its own section, so the blocked response is plain message construction.
+  - `ResponseInfo::serve_failed` is crate-private. The handler builds the failure value through the public `From<Header> for ResponseInfo`.
+  - `Catalog` REFUSES a query without the RD flag, because the forwarder only serves recursive queries. Blocked names are answered whether or not RD is set, since the filter runs first. Whether the forwarded path should instead answer non-RD queries is a behaviour question for dns-forwarding, not a blocker.
+  - The crate's minimum Rust version is 1.88, so the Alpine branch's Rust (packaging D1) must be at least that.
+  - The crate also ships an optional built-in `blocklist` zone handler (feature `blocklist`). It isn't used: our rule types, list formats and atomic swap need the request-level hook anyway.
 
 ### D2. Rule set: immutable, built whole, swapped atomically
 A `RuleSet` holds, separately for allow and block:

@@ -5,11 +5,15 @@
 //! and a `304 Not Modified` keeps the list's rules without reparsing them.
 //! Any failure leaves the list's last good rules in place.
 
-use std::{fmt, time::Duration, time::SystemTime};
+use std::{fmt, sync::Arc, time::Duration, time::SystemTime};
 
-use reqwest::{Client, StatusCode, Url, header, redirect};
+use reqwest::{Client, StatusCode, Url, dns::Resolve, header, redirect};
 
-use crate::lists::{ListSet, ListState, Source, Validators};
+use crate::{
+    bootstrap::BootstrapResolver,
+    config::Config,
+    lists::{DEFAULT_MAX_LIST_BYTES, ListSet, ListState, Source, Validators},
+};
 
 /// The default timeout for fetching one list.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -88,7 +92,40 @@ pub struct Fetcher {
 }
 
 impl Fetcher {
+    /// A fetcher that resolves list hosts with the system resolver.
     pub fn new(timeout: Duration, max_bytes: u64) -> Result<Self, FetchError> {
+        Self::build(timeout, max_bytes, None)
+    }
+
+    /// A fetcher with the limits from the defaults, resolving list hosts only
+    /// through the configured bootstrap resolver, or through the system
+    /// resolver when none is configured.
+    pub fn from_config(config: &Config) -> Result<Self, FetchError> {
+        let resolver: Option<Arc<dyn Resolve>> = match &config.filter.bootstrap {
+            Some(bootstrap) => {
+                let resolver = BootstrapResolver::new(bootstrap)
+                    .map_err(|e| FetchError::Request(e.to_string()))?;
+                Some(Arc::new(resolver))
+            }
+            None => None,
+        };
+        Self::build(DEFAULT_TIMEOUT, DEFAULT_MAX_LIST_BYTES, resolver)
+    }
+
+    /// A fetcher that resolves list hosts only through `resolver`.
+    pub fn with_resolver(
+        timeout: Duration,
+        max_bytes: u64,
+        resolver: Arc<dyn Resolve>,
+    ) -> Result<Self, FetchError> {
+        Self::build(timeout, max_bytes, Some(resolver))
+    }
+
+    fn build(
+        timeout: Duration,
+        max_bytes: u64,
+        resolver: Option<Arc<dyn Resolve>>,
+    ) -> Result<Self, FetchError> {
         let policy = redirect::Policy::custom(|attempt| {
             if attempt.previous().len() >= MAX_REDIRECTS {
                 return attempt.error("too many redirects");
@@ -104,12 +141,14 @@ impl Fetcher {
                 attempt.error(format!("redirect to {target} is not allowed"))
             }
         });
-        let client = Client::builder()
+        let mut builder = Client::builder()
             .timeout(timeout)
             .redirect(policy)
-            .user_agent(concat!("hickory-filter/", env!("CARGO_PKG_VERSION")))
-            .build()
-            .map_err(|e| FetchError::from_reqwest(&e))?;
+            .user_agent(concat!("hickory-filter/", env!("CARGO_PKG_VERSION")));
+        if let Some(resolver) = resolver {
+            builder = builder.dns_resolver(resolver);
+        }
+        let client = builder.build().map_err(|e| FetchError::from_reqwest(&e))?;
         Ok(Self { client, max_bytes })
     }
 

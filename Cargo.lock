@@ -516,6 +516,7 @@ dependencies = [
  "async-trait",
  "criterion",
  "fst",
+ "hickory-resolver",
  "hickory-server",
  "humantime",
  "regex",
@@ -533,6 +534,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea9b43710d47761c90da994eeec7e1bee50095f2b4bcdfd42acd67ca5f814e47"
 dependencies = [
  "async-trait",
+ "bytes",
  "cfg-if",
  "data-encoding",
  "futures-channel",
@@ -543,9 +545,12 @@ dependencies = [
  "ipnet",
  "jni",
  "rand",
+ "rustls",
+ "rustls-platform-verifier",
  "thiserror",
  "tinyvec",
  "tokio",
+ "tokio-rustls",
  "tracing",
  "url",
 ]
@@ -590,11 +595,13 @@ dependencies = [
  "parking_lot",
  "rand",
  "resolv-conf",
+ "rustls",
  "serde",
  "smallvec",
  "system-configuration",
  "thiserror",
  "tokio",
+ "tokio-rustls",
  "tracing",
 ]
 
@@ -1382,6 +1389,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "aws-lc-rs",
+ "log",
  "once_cell",
  "rustls-pki-types",
  "rustls-webpki",

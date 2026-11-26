@@ -310,7 +310,7 @@ impl ListSet {
                     _ => "it has not been loaded".to_owned(),
                 };
                 return Err(RequiredListError {
-                    url: list.decl.url.clone(),
+                    url: crate::metrics::display_url(&list.decl.url),
                     reason,
                 });
             }

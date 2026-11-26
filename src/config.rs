@@ -74,6 +74,8 @@ pub struct Config {
     pub http: Http,
     #[serde(default)]
     pub filter: Filter,
+    #[serde(default)]
+    pub log: Log,
 }
 
 impl Config {
@@ -363,6 +365,60 @@ impl<'de> Deserialize<'de> for Interval {
     }
 }
 
+/// How verbose the logs are.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    Error,
+    Warn,
+    #[default]
+    Info,
+    Debug,
+    Trace,
+}
+
+/// How log lines are written to stderr.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogFormat {
+    #[default]
+    Text,
+    Json,
+}
+
+/// How the client is written in query log lines.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum QueryLogClient {
+    /// The client's address.
+    #[default]
+    Address,
+    /// The address with the host part masked: the last octet of an IPv4
+    /// address zeroed, an IPv6 address cut to its first 48 bits.
+    Masked,
+    /// No client field at all.
+    Omit,
+}
+
+/// The `[log]` table.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Log {
+    /// `error`, `warn`, `info` (the default), `debug` or `trace`.
+    #[serde(default)]
+    pub level: LogLevel,
+    /// `text` (the default) or `json`.
+    #[serde(default)]
+    pub format: LogFormat,
+    /// Log one line per answered query. Off by default; without it queries are
+    /// only logged at the `debug` level.
+    #[serde(default)]
+    pub query_log: bool,
+    /// How the client appears in query lines.
+    #[serde(default)]
+    pub query_log_client: QueryLogClient,
+}
+
 /// The `[filter]` table.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -557,6 +613,43 @@ mod tests {
         let off = parse(&format!("{MINIMAL}\ncache_size = 0\n")).expect("valid");
         assert_eq!(off.cache_size, 0);
         assert!(error_text(&format!("{MINIMAL}\ncache_size = -1\n")).contains("cache_size"));
+    }
+
+    #[test]
+    fn the_log_table_has_documented_defaults_and_values() {
+        let defaults = parse(MINIMAL).expect("valid");
+        assert_eq!(defaults.log, Log::default());
+        assert_eq!(defaults.log.level, LogLevel::Info);
+        assert_eq!(defaults.log.format, LogFormat::Text);
+        assert!(!defaults.log.query_log);
+        assert_eq!(defaults.log.query_log_client, QueryLogClient::Address);
+
+        let set = parse(&format!(
+            "{MINIMAL}\n[log]\nlevel = \"debug\"\nformat = \"json\"\nquery_log = true\nquery_log_client = \"masked\"\n"
+        ))
+        .expect("valid");
+        assert_eq!(set.log.level, LogLevel::Debug);
+        assert_eq!(set.log.format, LogFormat::Json);
+        assert!(set.log.query_log);
+        assert_eq!(set.log.query_log_client, QueryLogClient::Masked);
+        let omit =
+            parse(&format!("{MINIMAL}\n[log]\nquery_log_client = \"omit\"\n")).expect("valid");
+        assert_eq!(omit.log.query_log_client, QueryLogClient::Omit);
+    }
+
+    #[test]
+    fn invalid_log_values_and_unknown_log_keys_are_rejected() {
+        for (line, needle) in [
+            ("level = \"loud\"", "loud"),
+            ("format = \"xml\"", "xml"),
+            ("query_log_client = \"hash\"", "hash"),
+            ("query_log = \"yes\"", "query_log"),
+            ("quer_log = true", "quer_log"),
+        ] {
+            let text = error_text(&format!("{MINIMAL}\n[log]\n{line}\n"));
+            assert!(text.contains("test.toml"), "{line}: {text}");
+            assert!(text.contains(needle), "{line}: {text}");
+        }
     }
 
     #[test]

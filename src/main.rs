@@ -4,7 +4,7 @@ use std::{path::PathBuf, process::ExitCode};
 
 use hickory_filter::{
     config::{Config, DEFAULT_CONFIG_PATH},
-    server,
+    logging, server,
 };
 use tokio::signal::unix::{SignalKind, signal};
 
@@ -95,6 +95,8 @@ fn run(path: &std::path::Path, check: bool) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    // Logs go to stderr; a failure here only means a subscriber already exists.
+    let _ = logging::init(&config.log);
     runtime.block_on(serve(&config))
 }
 
@@ -123,20 +125,20 @@ async fn serve(config: &Config) -> ExitCode {
         }
     };
     let addrs: Vec<String> = running.addrs().iter().map(ToString::to_string).collect();
-    eprintln!("{} listening on {}", version_line(), addrs.join(", "));
+    tracing::info!("{} listening on {}", version_line(), addrs.join(", "));
     if let Some(addr) = running.http_addr() {
-        eprintln!("http endpoint on {addr} (/health, /ready, /metrics)");
+        tracing::info!("http endpoint on {addr} (/health, /ready, /metrics)");
     }
     for (address, reason) in running.skipped() {
-        eprintln!("note: not listening on {address}: {reason}");
+        tracing::warn!("not listening on {address}: {reason}");
     }
 
     tokio::select! {
-        _ = terminate.recv() => eprintln!("received SIGTERM, shutting down"),
-        _ = interrupt.recv() => eprintln!("received SIGINT, shutting down"),
+        _ = terminate.recv() => tracing::info!("received SIGTERM, shutting down"),
+        _ = interrupt.recv() => tracing::info!("received SIGINT, shutting down"),
     }
     if !running.shutdown(server::SHUTDOWN_GRACE).await {
-        eprintln!("note: some queries were still in flight after the grace period");
+        tracing::warn!("some queries were still in flight after the grace period");
     }
     ExitCode::SUCCESS
 }

@@ -1,0 +1,17 @@
+# Enables every optional resource; used by hack/chart-test.sh.
+replicaCount: 2
+podLabels: {team: dns}
+podAnnotations: {example.com/note: "x"}
+service: {annotations: {example.com/svc: "y"}}
+cache: {enabled: true, sizeLimit: 64Mi}
+podDisruptionBudget: {enabled: true}
+networkPolicy: {enabled: true}
+serviceMonitor: {enabled: true, interval: 30s, labels: {release: monitoring}}
+podMonitor: {enabled: true, scrapeTimeout: 10s}
+grafanaDashboard: {enabled: true, instanceSelector: {matchLabels: {dashboards: grafana}}, folder: DNS}
+dashboardConfigMap: {enabled: true}
+config:
+  filter:
+    rules: ["block wildcard *.ads.example", "allow domain ok.ads.example"]
+    lists:
+      - {rule: "block list hosts https://lists.example/hosts.txt", refresh: 6h}

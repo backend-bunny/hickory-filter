@@ -1,0 +1,2 @@
+scrapeAnnotations: {enabled: true}
+config: {http: "0.0.0.0:9090"}

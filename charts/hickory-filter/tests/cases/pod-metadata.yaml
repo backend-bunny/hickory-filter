@@ -1,0 +1,3 @@
+podLabels: {team: dns}
+podAnnotations: {example.com/note: "x"}
+service: {annotations: {example.com/svc: "y"}}

@@ -1,0 +1,1 @@
+serviceMonitor: {enabled: true, interval: 30s, labels: {release: monitoring}}

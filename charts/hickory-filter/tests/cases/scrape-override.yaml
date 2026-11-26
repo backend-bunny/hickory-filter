@@ -1,0 +1,2 @@
+scrapeAnnotations: {enabled: true}
+podAnnotations: {prometheus.io/path: /custom}

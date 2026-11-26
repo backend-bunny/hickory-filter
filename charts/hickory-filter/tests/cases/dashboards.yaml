@@ -1,0 +1,2 @@
+grafanaDashboard: {enabled: true, instanceSelector: {matchLabels: {dashboards: grafana}}, folder: DNS}
+dashboardConfigMap: {enabled: true}

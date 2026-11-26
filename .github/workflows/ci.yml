@@ -49,10 +49,20 @@ jobs:
       - run: devbox run -- hack/cargo-check.sh
       - run: devbox run -- cargo deny check licenses
 
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-tools
+      - run: devbox run -- hack/chart-test.sh
+      - run: DRY_RUN=1 devbox run -- hack/chart-publish.sh
+
   # The single required check: fails unless every other job succeeded.
   ci-ok:
     if: always()
-    needs: [conventional-commits, policy, rust]
+    needs: [conventional-commits, policy, rust, chart]
     runs-on: ubuntu-latest
     steps:
       - env:

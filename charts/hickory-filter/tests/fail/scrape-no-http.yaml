@@ -1,0 +1,3 @@
+# expect: metrics endpoint is disabled
+scrapeAnnotations: {enabled: true}
+config: {http: false}

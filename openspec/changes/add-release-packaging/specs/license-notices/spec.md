@@ -35,7 +35,7 @@ CI SHALL fail when any linked crate's license expression can't be satisfied by a
 - **THEN** CI fails and names the crate and its license
 
 ### Requirement: Notices shipped in the image
-The image SHALL contain the notices as a human-readable file at `/usr/share/doc/hickory-filter/THIRD-PARTY-NOTICES.md`, together with the project's own license file.
+The image SHALL contain the notices as a human-readable file at `/usr/share/doc/hickory-filter/THIRD-PARTY-NOTICES.md`, together with the project's own license files (`LICENSE-MIT` and `LICENSE-APACHE`).
 
 #### Scenario: Notices in the image
 - **WHEN** the image filesystem is inspected

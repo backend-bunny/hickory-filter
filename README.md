@@ -100,4 +100,4 @@ relying on any of these numbers.
 
 ## License
 
-Not decided yet; the proposal is `MIT OR Apache-2.0`.
+Licensed under either of MIT or Apache-2.0, at your option (`MIT OR Apache-2.0`).

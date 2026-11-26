@@ -13,6 +13,7 @@ use crate::{
     bootstrap::BootstrapResolver,
     config::Config,
     lists::{DEFAULT_MAX_LIST_BYTES, ListSet, ListState, Source, Validators},
+    metrics::display_url,
 };
 
 /// The default timeout for fetching one list.
@@ -59,13 +60,15 @@ impl fmt::Display for FetchError {
 impl std::error::Error for FetchError {}
 
 impl FetchError {
-    fn from_reqwest(error: &reqwest::Error) -> Self {
+    fn from_reqwest(error: reqwest::Error) -> Self {
+        // The error text would otherwise carry the full URL, credentials included.
+        let error = error.without_url();
         if error.is_timeout() {
             return Self::Timeout;
         }
         // The cause chain carries the useful part (refused, reset, policy).
         let mut reason = error.to_string();
-        let mut source = std::error::Error::source(error);
+        let mut source = std::error::Error::source(&error);
         while let Some(cause) = source {
             reason.push_str(": ");
             reason.push_str(&cause.to_string());
@@ -137,7 +140,7 @@ impl Fetcher {
             if allowed {
                 attempt.follow()
             } else {
-                let target = attempt.url().to_string();
+                let target = display_url(attempt.url().as_str());
                 attempt.error(format!("redirect to {target} is not allowed"))
             }
         });
@@ -148,7 +151,7 @@ impl Fetcher {
         if let Some(resolver) = resolver {
             builder = builder.dns_resolver(resolver);
         }
-        let client = builder.build().map_err(|e| FetchError::from_reqwest(&e))?;
+        let client = builder.build().map_err(FetchError::from_reqwest)?;
         Ok(Self { client, max_bytes })
     }
 
@@ -166,10 +169,7 @@ impl Fetcher {
         if let Some(modified) = &validators.last_modified {
             request = request.header(header::IF_MODIFIED_SINCE, modified);
         }
-        let mut response = request
-            .send()
-            .await
-            .map_err(|e| FetchError::from_reqwest(&e))?;
+        let mut response = request.send().await.map_err(FetchError::from_reqwest)?;
 
         match response.status() {
             StatusCode::NOT_MODIFIED => return Ok(FetchOutcome::NotModified),
@@ -198,11 +198,7 @@ impl Fetcher {
         };
 
         let mut body = Vec::new();
-        while let Some(chunk) = response
-            .chunk()
-            .await
-            .map_err(|e| FetchError::from_reqwest(&e))?
-        {
+        while let Some(chunk) = response.chunk().await.map_err(FetchError::from_reqwest)? {
             if body.len() as u64 + chunk.len() as u64 > self.max_bytes {
                 return Err(too_large);
             }
@@ -226,9 +222,10 @@ pub async fn refresh_remote(fetcher: &Fetcher, list: &mut ListState, now: System
         Ok(FetchOutcome::Fetched { body, validators }) => list.apply_load(&body, validators, now),
         Ok(FetchOutcome::NotModified) if list.has_loaded() => list.record_not_modified(now),
         Ok(FetchOutcome::NotModified) => list.record_failure(format!(
-            "GET {url}: 304 Not Modified, but there is no previous copy"
+            "GET {}: 304 Not Modified, but there is no previous copy",
+            display_url(&url)
         )),
-        Err(error) => list.record_failure(format!("GET {url}: {error}")),
+        Err(error) => list.record_failure(format!("GET {}: {error}", display_url(&url))),
     }
 }
 

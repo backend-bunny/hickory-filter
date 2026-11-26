@@ -9,6 +9,7 @@ pub mod filter_handler;
 pub mod forwarder;
 pub mod http;
 pub mod lists;
+pub mod logging;
 pub mod metrics;
 pub mod refresh;
 pub mod rules;

@@ -184,6 +184,51 @@ fn exits_zero_on(signal: &str) {
 }
 
 #[test]
+fn json_logs_are_one_object_per_line_and_the_query_log_is_off() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let config = dir.path().join("config.toml");
+    std::fs::write(
+        &config,
+        "listen = [\"127.0.0.1:0\"]\nupstreams = [\"127.0.0.1:9\"]\nhttp = \"127.0.0.1:0\"\n\
+         [filter]\nrules = [\"block domain ads.example\"]\n[log]\nformat = \"json\"\n",
+    )
+    .expect("write config");
+    let mut process = spawn(&config);
+
+    let line = process.wait_for_line("listening on");
+    let object: serde_json::Value =
+        serde_json::from_str(&line).unwrap_or_else(|e| panic!("{line}: {e}"));
+    assert_eq!(object["level"], "INFO");
+    assert!(
+        object["target"]
+            .as_str()
+            .is_some_and(|t| t.starts_with("hickory_filter"))
+    );
+    assert!(
+        object["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("listening on")),
+        "{object}"
+    );
+
+    // A query is answered and, with the query log off, not logged at info.
+    let addr: SocketAddr = object["message"]
+        .as_str()
+        .and_then(|m| m.split("listening on ").nth(1))
+        .and_then(|a| a.split(',').next())
+        .and_then(|a| a.trim().parse().ok())
+        .expect("the listening address");
+    assert!(blocked_answer(addr));
+    process.signal("TERM");
+    let (status, _) = process.wait_exit(Duration::from_secs(15));
+    assert_eq!(status.code(), Some(0));
+    while let Ok(line) = process.lines.try_recv() {
+        assert!(!line.contains("hickory_filter::query"), "{line}");
+        assert!(!line.contains("ads.example"), "{line}");
+    }
+}
+
+#[test]
 fn sigterm_while_idle_exits_zero_within_the_grace_period() {
     exits_zero_on("TERM");
 }

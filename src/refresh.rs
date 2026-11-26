@@ -80,7 +80,7 @@ impl ListLoader for DefaultLoader {
                 .fetcher
                 .fetch(url, validators)
                 .await
-                .map_err(|e| format!("GET {url}: {e}")),
+                .map_err(|e| format!("GET {}: {e}", crate::metrics::display_url(url))),
         }
     }
 }
@@ -230,6 +230,7 @@ impl<L: ListLoader> Refresher<L> {
                 let list = &mut self.lists.lists_mut()[index];
                 changed |= list.apply(result, SystemTime::now());
                 crate::metrics::record_list(list);
+                log_list(list);
             }
         }
         changed
@@ -251,12 +252,52 @@ impl<L: ListLoader> Refresher<L> {
         .await;
         match built {
             Ok(Ok(set)) => {
+                let counts = set.counts();
                 self.live.swap(set);
                 self.last_build_error = None;
+                let total =
+                    |kinds: crate::ruleset::KindCounts| kinds.domain + kinds.wildcard + kinds.regex;
+                tracing::info!(
+                    allow = total(counts.allow),
+                    block = total(counts.block),
+                    "rule set replaced"
+                );
             }
-            Ok(Err(e)) => self.last_build_error = Some(e.to_string()),
-            Err(e) => self.last_build_error = Some(format!("rule set build failed: {e}")),
+            Ok(Err(e)) => {
+                tracing::warn!(reason = %e, "rule set build failed, keeping the previous rules");
+                self.last_build_error = Some(e.to_string());
+            }
+            Err(e) => {
+                tracing::warn!(reason = %e, "rule set build failed, keeping the previous rules");
+                self.last_build_error = Some(format!("rule set build failed: {e}"));
+            }
         }
+    }
+}
+
+/// Log how a list's last load or refresh went: list, result, rule count and
+/// skipped lines, as a warning when it failed. The URL has its credentials
+/// removed.
+fn log_list(list: &crate::lists::ListState) {
+    use crate::lists::LastResult;
+    let url = crate::metrics::display_url(&list.decl.url);
+    let action = match list.decl.action {
+        crate::rules::Action::Allow => "allow",
+        crate::rules::Action::Block => "block",
+    };
+    let list_type = list.decl.list_type.as_str();
+    let (rules, skipped) = (list.rules.len(), list.skipped);
+    match &list.last_result {
+        LastResult::Loaded => {
+            tracing::info!(list = %url, action, list_type, result = "loaded", rules, skipped, "list loaded");
+        }
+        LastResult::NotModified => {
+            tracing::info!(list = %url, action, list_type, result = "unchanged", rules, skipped, "list unchanged");
+        }
+        LastResult::Failed(reason) => {
+            tracing::warn!(list = %url, action, list_type, result = "failed", rules, skipped, reason = %reason, "list refresh failed, keeping the last good rules");
+        }
+        LastResult::NotAttempted => {}
     }
 }
 

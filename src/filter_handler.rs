@@ -19,6 +19,7 @@ use hickory_server::{
 use crate::{
     blocked::blocked_answer,
     config::Response,
+    logging::{QueryEvent, QueryLog},
     metrics,
     ruleset::{LiveRules, Verdict},
 };
@@ -28,6 +29,7 @@ pub struct FilterHandler {
     inner: Catalog,
     rules: Arc<LiveRules>,
     response: Response,
+    query_log: QueryLog,
 }
 
 impl FilterHandler {
@@ -38,7 +40,15 @@ impl FilterHandler {
             inner,
             rules,
             response,
+            query_log: QueryLog::default(),
         }
+    }
+
+    /// Log queries as `query_log` says (by default they are only logged at the
+    /// `debug` level).
+    pub fn with_query_log(mut self, query_log: QueryLog) -> Self {
+        self.query_log = query_log;
+        self
     }
 }
 
@@ -84,7 +94,16 @@ impl RequestHandler for FilterHandler {
                 Ok(info) => info,
                 Err(_) => serve_failed(request),
             };
-            metrics::record_query("blocked", record_type, started.elapsed());
+            let elapsed = started.elapsed();
+            metrics::record_query("blocked", record_type, elapsed);
+            self.query_log.record(&QueryEvent {
+                client: request.src().ip(),
+                name: info.query.name(),
+                record_type,
+                outcome: "blocked",
+                rcode: blocked.response_code,
+                elapsed,
+            });
             return sent;
         }
 
@@ -103,7 +122,17 @@ impl RequestHandler for FilterHandler {
             } else {
                 "passed"
             };
-            metrics::record_query(outcome, info.query.query_type(), started.elapsed());
+            let elapsed = started.elapsed();
+            let record_type = info.query.query_type();
+            metrics::record_query(outcome, record_type, elapsed);
+            self.query_log.record(&QueryEvent {
+                client: request.src().ip(),
+                name: info.query.name(),
+                record_type,
+                outcome,
+                rcode: answered.response_code,
+                elapsed,
+            });
         }
         answered
     }

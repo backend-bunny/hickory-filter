@@ -32,6 +32,7 @@ use crate::{
     forwarder::{ForwarderError, build_catalog},
     http::{self, Endpoint},
     lists::{RequiredListError, Source, Validators},
+    logging::QueryLog,
     metrics,
     refresh::{DefaultLoader, ListLoader, Refresher},
     rules::RuleError,
@@ -363,7 +364,8 @@ async fn serve_dns(
     refresher.initial_load().await?;
 
     let catalog = build_catalog(config)?;
-    let handler = FilterHandler::new(catalog, Arc::clone(&live), config.filter.response);
+    let handler = FilterHandler::new(catalog, Arc::clone(&live), config.filter.response)
+        .with_query_log(QueryLog::from_config(&config.log));
     let mut server = Server::new(handler);
     for socket in listeners.udp {
         server.register_socket(socket);

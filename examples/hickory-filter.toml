@@ -23,6 +23,22 @@ cache_size = 4096
 # Metrics, health and readiness. An address, or false to disable.
 http = "0.0.0.0:8080"
 
+[log]
+# Logs go to stderr. level: error, warn, info (the default), debug or trace.
+# format: text (the default) or json, one object per line.
+level = "info"
+format = "text"
+# One line per answered query, off by default (queries are then logged only at
+# debug level). A log collector can turn these lines into per-client and
+# per-name views. In JSON the fields client, name, type, outcome, rcode and
+# duration_ms are top-level members, and the line's target is
+# "hickory_filter::query".
+query_log = false
+# How the client appears in query lines: address (the default), masked (the
+# last octet of an IPv4 address zeroed, an IPv6 address cut to its first 48
+# bits) or omit (no client field).
+query_log_client = "address"
+
 [filter]
 # How often lists are reloaded. Units such as "6h" or "90m"; 0 disables.
 refresh = "24h"

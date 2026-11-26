@@ -2,6 +2,7 @@
 
 pub mod blocked;
 pub mod bootstrap;
+pub mod cache;
 pub mod config;
 pub mod fetch;
 pub mod filter_handler;

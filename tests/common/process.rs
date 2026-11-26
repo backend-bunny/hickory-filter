@@ -18,9 +18,14 @@ pub struct Process {
 }
 
 pub fn spawn(config: &Path) -> Process {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_hickory-filter"))
-        .arg("--config")
-        .arg(config)
+    let mut command = Command::new(env!("CARGO_BIN_EXE_hickory-filter"));
+    command.arg("--config").arg(config);
+    spawn_command(command)
+}
+
+/// Spawn any command whose stderr should be read like the binary's.
+pub fn spawn_command(mut command: Command) -> Process {
+    let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -82,6 +87,32 @@ impl Process {
             .status()
             .expect("run kill");
         assert!(status.success(), "kill -{name} failed");
+    }
+
+    /// Signal the first child of the spawned process, for a wrapper such as
+    /// `bwrap` that stays the parent of the real program. Reads the child's pid
+    /// from /proc (Linux).
+    pub fn signal_inner(&self, name: &str) {
+        let pid = self.child.id();
+        let path = format!("/proc/{pid}/task/{pid}/children");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let inner = loop {
+            let children = std::fs::read_to_string(&path).unwrap_or_default();
+            if let Some(first) = children.split_whitespace().next() {
+                break first.to_owned();
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the wrapper has no child process"
+            );
+            thread::sleep(Duration::from_millis(25));
+        };
+        let status = Command::new("kill")
+            .arg(format!("-{name}"))
+            .arg(inner)
+            .status()
+            .expect("run kill");
+        assert!(status.success(), "kill -{name} of the inner process failed");
     }
 
     /// Wait for the process to exit; kill it and fail after `limit`.

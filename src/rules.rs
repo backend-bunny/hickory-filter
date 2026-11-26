@@ -53,6 +53,18 @@ pub enum ListType {
     Regex,
 }
 
+impl ListType {
+    /// The name used in rule lines and metric labels.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Domain => "domain",
+            Self::Hosts => "hosts",
+            Self::Wildcard => "wildcard",
+            Self::Regex => "regex",
+        }
+    }
+}
+
 /// A list declared as `<action> list <type> <url>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ListDecl {

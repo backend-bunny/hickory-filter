@@ -227,7 +227,9 @@ impl<L: ListLoader> Refresher<L> {
             // A task that panicked has no result to apply; its list keeps its
             // last good rules.
             if let Ok((index, result)) = joined {
-                changed |= self.lists.lists_mut()[index].apply(result, SystemTime::now());
+                let list = &mut self.lists.lists_mut()[index];
+                changed |= list.apply(result, SystemTime::now());
+                crate::metrics::record_list(list);
             }
         }
         changed

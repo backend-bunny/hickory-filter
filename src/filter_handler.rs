@@ -7,7 +7,7 @@
 //! flags, SOA) independent of how `Catalog` maps zone-handler errors, and the
 //! filter runs before the forwarder's cache.
 
-use std::{iter, sync::Arc};
+use std::{iter, sync::Arc, time::Instant};
 
 use hickory_server::{
     net::runtime::Time,
@@ -16,7 +16,12 @@ use hickory_server::{
     zone_handler::{Catalog, MessageResponseBuilder},
 };
 
-use crate::{blocked::blocked_answer, config::Response, ruleset::LiveRules};
+use crate::{
+    blocked::blocked_answer,
+    config::Response,
+    metrics,
+    ruleset::{LiveRules, Verdict},
+};
 
 /// Answers blocked names per `response`, and forwards everything else.
 pub struct FilterHandler {
@@ -44,17 +49,22 @@ impl RequestHandler for FilterHandler {
         request: &Request,
         mut response_handle: R,
     ) -> ResponseInfo {
+        let started = Instant::now();
         let is_query = request.metadata.message_type == MessageType::Query
             && request.metadata.op_code == OpCode::Query;
-        if is_query
-            && let Ok(info) = request.request_info()
-            && self.rules.load().is_blocked(&info.query.name().to_string())
-        {
-            let blocked = blocked_answer(
-                &self.response,
-                info.query.original().name(),
-                info.query.query_type(),
-            );
+        let question = if is_query {
+            request.request_info().ok().map(|info| {
+                let verdict = self.rules.load().verdict(&info.query.name().to_string());
+                (info, verdict)
+            })
+        } else {
+            None
+        };
+
+        // A blocked name is answered here, per the configured mode.
+        if let Some((info, Verdict::Block)) = &question {
+            let record_type = info.query.query_type();
+            let blocked = blocked_answer(&self.response, info.query.original().name(), record_type);
             // The ID, the question and the RD flag are echoed from the request.
             let mut metadata = Metadata::response_from_request(info.metadata);
             metadata.response_code = blocked.response_code;
@@ -70,14 +80,32 @@ impl RequestHandler for FilterHandler {
             );
             // A failed send is the client's problem (it went away); the
             // protocol-level outcome is the same either way.
-            return match response_handle.send_response(response).await {
+            let sent = match response_handle.send_response(response).await {
                 Ok(info) => info,
                 Err(_) => serve_failed(request),
             };
+            metrics::record_query("blocked", record_type, started.elapsed());
+            return sent;
         }
-        self.inner
+
+        // Everything else is forwarded. An allow rule only changes how the
+        // query is counted, and an answer of SERVFAIL means no upstream
+        // answered.
+        let answered = self
+            .inner
             .handle_request::<R, T>(request, response_handle)
-            .await
+            .await;
+        if let Some((info, verdict)) = question {
+            let outcome = if answered.response_code == ResponseCode::ServFail {
+                "upstream_error"
+            } else if verdict == Verdict::Allow {
+                "allowed"
+            } else {
+                "passed"
+            };
+            metrics::record_query(outcome, info.query.query_type(), started.elapsed());
+        }
+        answered
     }
 }
 

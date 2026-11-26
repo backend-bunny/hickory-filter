@@ -24,6 +24,9 @@ while IFS=: read -r file lineno url; do
   host_path="${url#*://}"
   host_path="${host_path%%[\"\'\`) >,;]*}"
   host="${host_path%%/*}"
+  host="${host%%[?#]*}"   # a query or fragment right after the host
+  host="${host##*@}"      # credentials before the host
+  host="${host%%:*}"      # a port after it
   [ -n "$host" ] || continue   # `https:///x` links nowhere
   case "$host" in *"{"*) continue ;; esac   # a format placeholder, not a host
   if ! printf '%s\n' "$host_path" | grep -Eq "$ALLOWED_HOSTS" \

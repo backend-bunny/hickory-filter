@@ -53,17 +53,17 @@ The server SHALL serve metrics, health and readiness over HTTP on one configurab
 - **THEN** no metric carries a client address or a queried name
 
 ### Requirement: Upstream and cache metrics
-`/metrics` SHALL expose the number of queries sent to each upstream and how many of them failed or timed out, and the response cache's hits and misses, so that upstream health and the cache's effectiveness are visible.
+`/metrics` SHALL expose the number of queries sent to the upstreams, by transport protocol, how many of their responses succeeded and how many timed out or failed, and the response cache's hits and misses, so that upstream health and the cache's effectiveness are visible.
 
 #### Scenario: Cache hit
 - **GIVEN** a name was answered by an upstream and cached
 - **WHEN** a client queries it again
-- **THEN** the cache-hit count increases and the upstream's query count does not
+- **THEN** the cache-hit count increases and the count of queries sent upstream does not
 
 #### Scenario: Unreachable upstream
 - **GIVEN** an upstream that does not answer
 - **WHEN** a client queries a name that isn't blocked
-- **THEN** that upstream's failure count increases
+- **THEN** the count of timed-out or failed upstream responses increases
 
 ### Requirement: Rule set metrics
 `/metrics` SHALL expose the number of rules in the live rule set by action and kind (domain, wildcard, regex), how many times the rule set has been replaced, and the time of the last replacement.

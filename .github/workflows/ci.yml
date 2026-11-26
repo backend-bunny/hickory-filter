@@ -2,6 +2,10 @@ name: ci
 
 on:
   pull_request:
+  # Runs on main too: caches written there are visible to every pull request,
+  # while caches written by a pull request are visible only to that one.
+  push:
+    branches: [main]
   workflow_dispatch:
 
 # Read-only: pull request builds never publish, sign or get an OIDC token.

@@ -95,13 +95,34 @@ Upstream and bootstrap resolvers are IP addresses, never host names:
 `tls://` requires the `#name`. Refresh intervals take units (`"6h"`, `"90m"`);
 `0` disables.
 
-## Memory (estimates, not measured)
+## Memory and lookup cost (measured)
 
-About 85–95 bytes per blocked domain, so roughly 90–110 MiB steady state for
-1M domains. There's no garbage collector, so memory tracks the live rule
-set. A refresh briefly holds the old and new sets at once. A reversed-domain
-FST is a later option, plausibly 10–30 MB for 1M domains. Benchmark before
-relying on any of these numbers.
+Measured with `cargo run --release --example memory` and `cargo bench --bench
+lookup`, on a rule set of 1M exact names plus 5,000 wildcards, 50 regexes
+and 100 allow rules, x86_64 Linux, glibc allocator, Rust 1.98.1:
+
+| | |
+|---|---|
+| Steady-state memory | 83 MiB resident, about 85 bytes per name |
+| During a refresh (old and new sets both live) | 176 MiB peak |
+| After the swap | 142 MiB resident (freed memory is not returned to the OS right away) |
+| Building the set | 0.4 s |
+
+| Lookup | Time |
+|---|---|
+| Allow hit | 23 ns |
+| Exact hit | 61 ns |
+| Miss (suffix walk plus the regex set) | 100 ns |
+| Wildcard hit, two labels below the base | 99 ns |
+| Regex hit (50 patterns) | 120 ns |
+
+Memory tracks the live rule set, since there is no garbage collector, and a
+refresh briefly holds the old and new sets at once, so size for roughly twice
+the steady figure. The release binary is statically linked against musl,
+whose allocator behaves differently; these numbers are from the development
+build and still need repeating on the release build. A reversed-domain FST
+remains a later option if memory matters more than the simplicity of hash
+sets; these numbers are the baseline to compare it against.
 
 ## Packaging (planned)
 

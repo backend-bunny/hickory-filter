@@ -39,6 +39,8 @@ jobs:
           persist-credentials: false
       - run: hack/check-policy.sh
       - run: python3 -I -m unittest discover -s hack
+      - run: hack/test-check-version.sh
+      - run: hack/test-publish.sh
 
   rust:
     runs-on: ubuntu-latest

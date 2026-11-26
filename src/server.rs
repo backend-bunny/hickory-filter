@@ -32,6 +32,7 @@ use crate::{
     forwarder::{ForwarderError, build_catalog},
     http::{self, Endpoint},
     lists::{RequiredListError, Source, Validators},
+    metrics,
     refresh::{DefaultLoader, ListLoader, Refresher},
     rules::RuleError,
     ruleset::{LiveRules, RuleSet},
@@ -334,8 +335,7 @@ async fn start_http(
     let listener = TcpListener::bind(address).await.map_err(bind_error)?;
     let addr = listener.local_addr().map_err(bind_error)?;
     let (stop, mut stopped) = watch::channel(false);
-    // No metrics are recorded yet: an empty exposition is valid.
-    let endpoint = Arc::new(Endpoint::new(Arc::clone(ready), Arc::new(String::new)));
+    let endpoint = Arc::new(Endpoint::new(Arc::clone(ready), Arc::new(metrics::render)));
     let handle = tokio::spawn(http::serve(listener, endpoint, async move {
         let _ = stopped.changed().await;
     }));
@@ -382,6 +382,8 @@ async fn serve_dns(
 /// loaded stops startup. The HTTP endpoint comes up first and reports ready
 /// once the lists are loaded and the DNS listeners are serving.
 pub async fn start(config: &Config) -> Result<Running, StartError> {
+    // Record metrics from the start, including the initial list load.
+    metrics::install();
     // Bind first so a bad address fails before any list is fetched.
     let listeners = bind(&config.listen)?;
     let ready = Arc::new(AtomicBool::new(false));

@@ -218,6 +218,7 @@ impl NameIndex for FstNames {
 struct Side {
     names: FstNames,
     regex: RegexSet,
+    counts: KindCounts,
 }
 
 impl Side {
@@ -245,11 +246,33 @@ impl SideBuilder {
     }
 
     fn finish(self) -> Result<Side, BuildError> {
+        let counts = KindCounts {
+            domain: self.exact.ranges.len(),
+            wildcard: self.suffix.ranges.len(),
+            regex: self.patterns.len(),
+        };
         Ok(Side {
             names: FstNames::from_keys(self.exact, self.suffix)?,
             regex: RegexSet::new(&self.patterns)?,
+            counts,
         })
     }
+}
+
+/// How many rules of each kind one side of a rule set holds.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct KindCounts {
+    pub domain: usize,
+    pub wildcard: usize,
+    pub regex: usize,
+}
+
+/// How many rules a rule set holds, by action and kind (as given, before
+/// duplicates are merged).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RuleCounts {
+    pub allow: KindCounts,
+    pub block: KindCounts,
 }
 
 /// An immutable set of allow and block rules.
@@ -260,6 +283,14 @@ pub struct RuleSet {
 }
 
 impl RuleSet {
+    /// How many rules of each kind the set was built from.
+    pub fn counts(&self) -> RuleCounts {
+        RuleCounts {
+            allow: self.allow.counts,
+            block: self.block.counts,
+        }
+    }
+
     /// Build a set from rules, owned or borrowed.
     pub fn from_rules<R: Borrow<Rule>>(
         rules: impl IntoIterator<Item = R>,
@@ -339,6 +370,7 @@ impl LiveRules {
 
     /// Replace the set atomically.
     pub fn swap(&self, new: RuleSet) {
+        crate::metrics::record_ruleset_swap(&new.counts());
         self.current.store(Arc::new(new));
         self.generation.fetch_add(1, Ordering::Relaxed);
     }
@@ -573,6 +605,35 @@ mod tests {
         let after = live.load();
         assert!(after.is_blocked("new.example"));
         assert!(!after.is_blocked("old.example"));
+    }
+
+    #[test]
+    fn the_set_counts_its_rules_by_action_and_kind() {
+        let rules = set(&[
+            "block domain a.example",
+            "block domain b.example",
+            "block wildcard c.example",
+            r"block regex ^ad\.",
+            "allow domain ok.example",
+            "allow wildcard ok2.example",
+            "allow wildcard ok3.example",
+        ]);
+        assert_eq!(
+            rules.counts(),
+            RuleCounts {
+                block: KindCounts {
+                    domain: 2,
+                    wildcard: 1,
+                    regex: 1
+                },
+                allow: KindCounts {
+                    domain: 1,
+                    wildcard: 2,
+                    regex: 0
+                },
+            }
+        );
+        assert_eq!(RuleSet::default().counts(), RuleCounts::default());
     }
 
     #[test]

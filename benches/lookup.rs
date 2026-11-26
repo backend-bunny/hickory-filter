@@ -11,13 +11,14 @@ mod workload;
 fn lookups(c: &mut Criterion) {
     let set = RuleSet::from_rules(workload::rules(workload::EXACT_NAMES)).expect("build");
 
-    let hit = workload::exact_name(workload::EXACT_NAMES / 2);
+    let hit = workload::sample_exact(workload::EXACT_NAMES / 2);
     assert_eq!(set.verdict(&hit), Verdict::Block);
     c.bench_function("exact hit (1M names)", |b| {
         b.iter(|| set.verdict(black_box(&hit)))
     });
 
-    let suffix = "a.b.wild42.example";
+    let suffix = format!("a.b.{}", workload::wildcard_base(42));
+    let suffix = suffix.as_str();
     assert_eq!(set.verdict(suffix), Verdict::Block);
     c.bench_function("wildcard hit, two labels below the base", |b| {
         b.iter(|| set.verdict(black_box(suffix)))
@@ -34,9 +35,15 @@ fn lookups(c: &mut Criterion) {
     c.bench_function("allow hit", |b| b.iter(|| set.verdict(black_box(allowed))));
 
     let miss = "www.news.example";
+    assert_eq!(set.verdict("www.unlisted-site-q9.com"), Verdict::Pass);
     assert_eq!(set.verdict(miss), Verdict::Pass);
     c.bench_function("miss (walks suffixes, runs regex set)", |b| {
         b.iter(|| set.verdict(black_box(miss)))
+    });
+
+    let miss_com = "www.unlisted-site-q9.com";
+    c.bench_function("miss under a populated suffix (com)", |b| {
+        b.iter(|| set.verdict(black_box(miss_com)))
     });
 
     let upper = "WWW.News.Example.";

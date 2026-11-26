@@ -13,6 +13,49 @@ A release SHALL be built from a `vX.Y.Z` tag, and only from it. The tag version 
 - **WHEN** tag `v1.2.3` points at a commit whose `Cargo.toml` says `1.2.2`
 - **THEN** the release fails without publishing anything
 
+### Requirement: Release PR is the human gate
+Releases SHALL be started by merging a release pull request, kept up to date automatically from the Conventional Commits merged since the last release. Merging it SHALL create the `vX.Y.Z` tag and the GitHub Release and then publish, in the same workflow run. Pushing a tag by hand SHALL NOT publish anything.
+
+#### Scenario: Merge publishes
+- **WHEN** the release PR for `1.2.3` is merged
+- **THEN** tag `v1.2.3` and its GitHub Release are created and the publish workflow runs for that tag
+
+#### Scenario: Hand-pushed tag
+- **WHEN** someone pushes a `vX.Y.Z` tag without merging a release PR
+- **THEN** no image or chart is published
+
+### Requirement: Release PR carries the version bump
+The release PR SHALL bump `Cargo.toml`, `Cargo.lock`, the melange package version and the chart's `version` and `appVersion` together, and update `CHANGELOG.md`. It SHALL run the same CI checks as any other PR before it can merge.
+
+#### Scenario: Versions bumped together
+- **WHEN** the release PR for `1.2.3` is opened
+- **THEN** `Cargo.toml`, `Cargo.lock`, the melange version and the chart `version` and `appVersion` all say `1.2.3`
+
+#### Scenario: No releasable commits
+- **WHEN** the only commits since the last release are of hidden types (docs, ci, chore, test, refactor, style)
+- **THEN** no release PR proposes a new version
+
+### Requirement: Conventional Commits enforced
+Pull request titles and every commit subject SHALL follow `type(scope)!: subject`, and CI SHALL fail otherwise, because they decide the next version and the changelog.
+
+#### Scenario: Bad title
+- **WHEN** a pull request is titled "update stuff"
+- **THEN** the `conventional-commits` check fails
+
+### Requirement: Single required check
+CI SHALL expose one aggregate check, `ci-ok`, that fails unless every other CI job succeeded. Branch protection on `main` SHALL require it, and direct pushes to `main` are not part of the workflow.
+
+#### Scenario: One job fails
+- **WHEN** the chart job fails and the others pass
+- **THEN** `ci-ok` fails and the PR can't merge
+
+### Requirement: Dependency updates
+Dependencies SHALL be kept current by an automated update tool that pins CI actions by digest and groups crate, toolchain and action bumps. Its commit types SHALL be set so crate and toolchain bumps produce a patch release and action bumps produce none. Bumping the Alpine branch of the build environment SHALL require explicit approval.
+
+#### Scenario: Action bump
+- **WHEN** the tool bumps a pinned action
+- **THEN** the commit type is `ci(deps)` and no release is proposed for it
+
 ### Requirement: Image tags
 A released image SHALL be tagged `X.Y.Z` and `sha-<short commit>`. No floating tag such as `latest` SHALL be published. Documentation SHALL tell consumers to pin by digest.
 
@@ -28,7 +71,7 @@ The image index digest and the chart's OCI digest SHALL each be signed with cosi
 - **THEN** verification succeeds
 
 #### Scenario: Verify chart signature
-- **WHEN** a consumer runs `cosign verify <registry>/<owner>/charts/hickory-filter@<chart digest>` with the same identity constraints
+- **WHEN** a consumer runs `cosign verify ghcr.io/backend-bunny/charts/hickory-filter@<chart digest>` with the same identity constraints
 - **THEN** verification succeeds
 
 ### Requirement: Sign what tags point to
@@ -72,6 +115,13 @@ melange, apko, cosign, helm and the other build tools SHALL be pinned to exact v
 #### Scenario: Same tools locally and in CI
 - **WHEN** a developer runs the build locally through the pinned toolchain
 - **THEN** it uses the same tool versions as CI
+
+### Requirement: One implementation per step
+Local tasks and CI jobs SHALL call the same scripts for building, testing, locking, notices and publishing. CI SHALL NOT carry its own copy of a step's logic.
+
+#### Scenario: Local run matches CI
+- **WHEN** a developer runs the Rust checks task locally
+- **THEN** it runs the script the CI `rust` job runs
 
 ### Requirement: Release record
 The release notes SHALL list the image digest, the chart reference and digest, and copy-pasteable verification commands for both.

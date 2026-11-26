@@ -1,0 +1,42 @@
+# Cargo build output (Cargo.lock is committed)
+/target/
+
+# Build outputs (melange APKs, apko image tarballs, SBOMs, vendored crates)
+/packages/
+/out/
+/.cache/
+/vendor/
+*.tar
+*.spdx.json
+
+# melange keys are generated per build and must never be committed
+*.rsa
+*.rsa.pub
+/.keys/
+
+# devbox environment state (devbox.json + devbox.lock are committed)
+/.devbox/
+
+# Local environment and secrets
+.env
+.env.*
+*.kdbx
+
+# Editor and local tool state
+.idea/
+.vscode/
+.claude/settings.local.json
+.claude/.cc-writes/
+node_modules/
+
+# Shell and tool placeholders that appear in sandboxed agent sessions
+/.bash_profile
+/.bashrc
+/.zprofile
+/.zshrc
+/.profile
+/.gitconfig
+/.gitmodules
+/.mcp.json
+/.ripgreprc
+/scripts/

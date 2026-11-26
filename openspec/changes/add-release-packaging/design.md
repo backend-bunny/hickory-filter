@@ -7,7 +7,8 @@ See proposal.md for the motivation and specs/ for the required behaviour. Constr
 - Wolfi, which the runtime image uses, ships Rust toolchains (`rust-1.xx`) that target glibc only. It has no musl Rust target. A static *glibc* build would link LGPL-2.1 code into the binary, with relinking obligations. musl is MIT.
 - Alpine's `rust` targets musl natively. `-C target-feature=+crt-static` gives a static-pie binary.
 - apko's SPDX SBOM lists APKs, not the crates compiled into a binary.
-- Keyless cosign and SLSA provenance need a CI with an OIDC token issuer. Repo hosting is still open (AGENTS.md), so paths use `<registry>/<owner>`.
+- Keyless cosign and SLSA provenance need a CI with an OIDC token issuer. Hosting is GitHub (`backend-bunny/hickory-filter`) with GHCR as the registry: image `ghcr.io/backend-bunny/hickory-filter`, chart `oci://ghcr.io/backend-bunny/charts/hickory-filter`.
+- Actions run with `GITHUB_TOKEN`, whose events do not trigger other workflows. A release created by the release PR tool therefore can't trigger a tag-push workflow, and a PR it pushes doesn't trigger `pull_request` CI. D4 handles both.
 
 ## Goals / Non-Goals
 
@@ -20,7 +21,8 @@ See proposal.md for the motivation and specs/ for the required behaviour. Constr
 - Multi-arch images (x86_64 only, until a consumer needs more).
 - A source-archive OCI artifact (corresponding source stays the tagged commit plus the crates' registry sources listed in the notices).
 - Admission-policy manifests for consumers; the chart README documents the verification commands instead.
-- Automated dependency-update tooling and lock-refresh schedules (a later change).
+- A scheduled apko lock-refresh workflow. The runtime lock is data-only (base layout and CA bundle) and the binary is static, so a refresh would ship nothing by itself. Wolfi updates go in through a reviewed `task lock` PR merged before the release PR. Revisit if the image gains code packages or publishes on every merge.
+- Fully automatic releases on every merge: the release PR is the human gate, because clusters pull this image.
 
 ## Decisions
 
@@ -41,9 +43,17 @@ melange's build environment uses Alpine's main and community repositories (a pin
 - Each build runs `melange keygen` in a temp dir, signs the APK, deletes the private key, and passes the public key to apko with `--keyring-append`. The key is never listed in `apko.yaml`.
 - `melange test` and apko get no package cache, so they always install the just-built APK.
 
-### D4. Release pipeline (tag → artifacts)
+### D4. Release pipeline (release PR → tag → artifacts)
 ```
-vX.Y.Z tag
+push to main
+  └─ release-please opens/updates "chore: release X.Y.Z" PR
+       (Cargo.toml + Cargo.lock, melange.yaml, Chart.yaml, CHANGELOG.md)
+       └─ dispatches ci.yml on the PR branch (so ci-ok gates the merge)
+merge of that PR
+  └─ release-please creates tag vX.Y.Z + GitHub Release
+  └─ calls release.yml (workflow_call) in the same run
+release.yml (also workflow_dispatch with an existing tag, to retry)
+  └─ check out the tag
   └─ check versions (tag = Cargo.toml = melange = chart)
   └─ cargo fmt/clippy/test, cargo deny check licenses
   └─ chart lint + schema validation (default + all-optional values)
@@ -57,7 +67,11 @@ vX.Y.Z tag
 ```
 - The digest is resolved from the pushed tag (the index), never from apko's per-arch image refs, so signatures sit where the tags point.
 - The chart is packaged from a temp copy with `image.digest` filled in. The committed `values.yaml` keeps `digest: ""`.
-- Versioning: a release PR tool bumps `Cargo.toml`, `melange.yaml` and `Chart.yaml` together. The exact tool is picked during implementation, and `hack/check-version.sh` enforces the invariant whichever tool is used.
+- Versioning: release-please in manifest mode (`release-please-config.json`, `.release-please-manifest.json`; the action pinned by SHA, `GITHUB_TOKEN` only). The `rust` strategy bumps `Cargo.toml` and `Cargo.lock`. The `generic` updater bumps `melange.yaml` and `Chart.yaml` on lines marked `x-release-please-version` (the `yaml` updater re-serialises and would drop comments). `bump-minor-pre-major` is on, so a breaking change before 1.0 bumps the minor. `hack/check-version.sh` enforces that all versions agree, and fails the release if they don't.
+- Publishing from `release-please.yml` via `workflow_call`, not from a tag-push trigger: tags and releases created with `GITHUB_TOKEN` don't fire other workflows, and removing the tag trigger means a hand-pushed tag publishes nothing.
+- Changelog sections: Features, Bug Fixes, Performance, Reverts, Build and Image, Dependencies. `docs`, `ci`, `chore`, `test`, `refactor` and `style` are hidden.
+- Retrying a failed publish: `workflow_dispatch` of `release.yml` with the existing tag. That re-pushes the `X.Y.Z` tags with a new digest, so do it only if nothing was published; otherwise release a fix.
+- Chart golden renders (if used) store a `VERSION` placeholder, because the release PR's version bump doesn't run project tooling to regenerate them.
 - Permissions: workflows default to `contents: read`. Only the release job gets `packages: write`, `id-token: write`, `attestations: write` (and `contents: write` for release notes). PR CI runs build + tests + a publish dry run without those permissions, and no `pull_request_target`.
 
 ### D5. License notices: generated from the vendored tree, shipped twice
@@ -73,8 +87,17 @@ vX.Y.Z tag
 - Service: `port: 53` → `targetPort: 1053`, UDP and TCP, plus an HTTP port for metrics.
 - Validation: `helm lint` and a Kubernetes schema validator (pinned) over default and `ci/all-on-values.yaml` renders. In the image smoke test the chart isn't installed; cluster install is checked with a kind-style test only if added later.
 
-### D7. Pinned toolchain manifest
-One manifest (a devbox-style `devbox.json` + lock) pins melange, apko, cosign, helm, the schema validator, cargo-deny, bubblewrap, python3, jq and the dev Rust toolchain. CI installs tools from it, and Taskfile tasks call the same `hack/` scripts.
+### D7. Pinned toolchain manifest and dev environment
+One manifest (`devbox.json` + `devbox.lock`, one nixpkgs lock for CI and local) pins melange, apko, cosign, helm, the schema validator, cargo-deny, bubblewrap, go-task, python3, jq and the dev Rust toolchain. `.envrc` loads it with direnv. A composite action `.github/actions/setup-tools` installs it in CI and restores caches (`~/.cargo/registry`, `~/.cargo/git`, `target`, `.cache`) keyed on `Cargo.lock`, `melange.yaml`, `apko.lock.json` and `devbox.lock`. `Taskfile.yml` tasks call the same `hack/` scripts CI runs, so there is one implementation of each step.
+- Local `devbox install` needs the nix daemon, and the image smoke test needs a container runtime, so some checks run only in CI.
+
+### D8. CI workflows
+- `ci.yml` (pull requests and manual dispatch, `contents: read`): jobs `conventional-commits` (PR title and every commit subject, via `hack/check-commits.sh`), `rust` (fmt, clippy `-D warnings`, test, `cargo deny check licenses`), `chart` (lint, schema validation, a package dry run), `image` (build via melange and apko, notices summary, smoke test, publish dry run), and `ci-ok`, the single required check, which fails unless all others passed.
+- `release-please.yml` (push to `main`): the release PR and, on merge, the tag, the GitHub Release and the call to `release.yml`.
+- `release.yml`: publish as in D4. Permissions are granted to its publish job only.
+- Policy checks in CI: every action pinned by full SHA with a version comment, and the self-contained-docs grep.
+- `renovate.json`: extends the recommended preset with actions pinned by digest. Crate and devbox toolchain bumps use commit type `fix(deps)` (a patch release), action bumps `ci(deps)` (no release), and Alpine branch bumps `build(deps)` behind dashboard approval, since the branch sets the compiler that builds releases. Lockfile maintenance runs weekly.
+- Conventional Commits are enforced because they set the version and the changelog.
 
 ## Risks / Trade-offs
 
@@ -87,9 +110,10 @@ One manifest (a devbox-style `devbox.json` + lock) pins melange, apko, cosign, h
 
 ## Migration Plan
 
-New project, nothing to migrate. AGENTS.md already carries the packaging rules; task 1.1 reconciles them with the implementation. The first tag publishes the first image and chart.
+New project, nothing to migrate. AGENTS.md already carries the packaging rules; task 1.1 reconciles them with the implementation. The first release PR merge publishes the first image and chart.
+
+One-time repository setup (by a maintainer): allow Actions to create and approve pull requests, allow OIDC (`id-token: write`) for workflows, require `ci-ok` on `main`, and, after the first publish, set the GHCR packages (image and chart) public if they should be.
 
 ## Open Questions
 
-- Release PR tooling (D4). It doesn't change the specs, and `hack/check-version.sh` enforces the invariant either way.
-- Registry and owner paths, which follow from the repo hosting decision (AGENTS.md). They don't change behaviour.
+None. Hosting (GitHub, GHCR under `backend-bunny`) and release tooling (release-please) are decided above.

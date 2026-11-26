@@ -41,9 +41,17 @@ in `openspec/changes/`. Use the `openspec-*` skills (`.claude/skills/` →
 - **Rust:** stable toolchain pinned in `rust-toolchain.toml`. `cargo fmt`,
   `cargo clippy -- -D warnings` and `cargo test` pass on every change. No
   `unsafe`. rustls, not OpenSSL.
-- **Releases are tags** (`vX.Y.Z`) on an immutable commit. The release builds
-  and publishes the image and the Helm chart (OCI) from this repo. See the
+- **Releases are tags** (`vX.Y.Z`) on an immutable commit, created only by
+  merging the release-please `chore: release X.Y.Z` PR. Never bump versions
+  or push release tags by hand. The release builds and publishes the image
+  and the Helm chart (OCI) to `ghcr.io/backend-bunny`. See the
   `add-release-packaging` change for details.
+- **Conventional Commits.** PR titles and commit subjects are
+  `type(scope)!: subject`; CI enforces it because they set the version.
+- **Never push to `main` directly.** Branch, PR, `ci-ok` green.
+- **Pin everything.** Actions by full SHA with a version comment, the
+  toolchain in `devbox.json` + `devbox.lock`, crates in `Cargo.lock`. CI and
+  local tasks call the same `hack/` scripts.
 - **Packaging:** melange + apko only, **no Dockerfiles**. The binary is
   **statically linked against musl**: built in an Alpine melange environment
   (Wolfi's Rust targets glibc only), with a distroless Wolfi runtime image
@@ -72,7 +80,3 @@ Record the answer in the relevant spec/design, then remove it here.
    lines (`block wildcard *.x`) inside it.
 3. **Rule storage:** hash sets first; a reversed-domain FST later if
    benchmarks justify it.
-4. **Repo hosting:** not created yet. Registry and chart paths
-   (`<registry>/<owner>`) follow from it.
-5. **Release PR tooling:** not picked. `hack/check-version.sh` enforces
-   matching versions either way.

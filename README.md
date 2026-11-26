@@ -86,11 +86,11 @@ relying on any of these numbers.
 
 ## Packaging (planned)
 
-- **Image:** `<registry>/<owner>/hickory-filter`, built with melange and apko
+- **Image:** `ghcr.io/backend-bunny/hickory-filter`, built with melange and apko
   (no Dockerfile). A static musl binary plus CA certificates: no shell, no
   libc. Runs as uid/gid 65532 with all capabilities dropped and a read-only
   root filesystem. Tags `X.Y.Z` and `sha-<commit>`; **pin by digest**.
-- **Helm chart:** `oci://<registry>/<owner>/charts/hickory-filter`. Each
+- **Helm chart:** `oci://ghcr.io/backend-bunny/charts/hickory-filter`. Each
   release pins the image digest it shipped with, and its defaults meet the
   `restricted` Pod Security Standard.
 - **Verifiable:** image and chart are signed keylessly with cosign and carry

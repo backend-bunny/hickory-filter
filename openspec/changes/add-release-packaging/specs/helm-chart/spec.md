@@ -51,7 +51,7 @@ A released chart's default image reference SHALL be the digest published in the 
 
 #### Scenario: Default image of a release
 - **WHEN** the released chart version `X.Y.Z` is rendered with default values
-- **THEN** the container image is `<registry>/<owner>/hickory-filter@<digest of release X.Y.Z>`
+- **THEN** the container image is `ghcr.io/backend-bunny/hickory-filter@<digest of release X.Y.Z>`
 
 ### Requirement: Chart versioning
 The chart's `version` and `appVersion` SHALL both equal the release version `X.Y.Z`.
@@ -61,10 +61,10 @@ The chart's `version` and `appVersion` SHALL both equal the release version `X.Y
 - **THEN** `version` and `appVersion` are both `1.2.3`
 
 ### Requirement: Published as an OCI artifact
-The packaged chart SHALL be pushed to an OCI registry at `oci://<registry>/<owner>/charts/hickory-filter`, installable with `helm install` from that reference and version.
+The packaged chart SHALL be pushed to an OCI registry at `oci://ghcr.io/backend-bunny/charts/hickory-filter`, installable with `helm install` from that reference and version.
 
 #### Scenario: Install from OCI
-- **WHEN** a user runs `helm install dns oci://<registry>/<owner>/charts/hickory-filter --version X.Y.Z`
+- **WHEN** a user runs `helm install dns oci://ghcr.io/backend-bunny/charts/hickory-filter --version X.Y.Z`
 - **THEN** the release installs with the pinned image
 
 ### Requirement: Chart validated in CI

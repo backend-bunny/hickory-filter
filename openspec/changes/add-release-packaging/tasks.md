@@ -3,7 +3,8 @@
 ## 1. Project rules and toolchain
 
 - [ ] 1.1 Check AGENTS.md packaging rules (added with this proposal) against the final implementation and update any detail that changed; verify the self-contained-docs grep in 6.3 passes
-- [ ] 1.2 Add the pinned toolchain manifest (melange, apko, cosign, helm, schema validator, cargo-deny, bubblewrap, python3, jq, dev Rust) and a Taskfile with build/test/lock/chart/publish-dry-run tasks calling `hack/`; verify `task --list` and each tool's `--version` run through the manifest
+- [ ] 1.2 Add the pinned toolchain (`devbox.json` + `devbox.lock`: melange, apko, cosign, helm, schema validator, cargo-deny, bubblewrap, go-task, python3, jq, dev Rust), `.envrc`, `.gitignore` (build outputs, vendored crates, melange keys, devbox state), and a `Taskfile.yml` with build/test/lock/chart/publish-dry-run tasks calling `hack/`; verify `task --list` and each tool's `--version` run through the manifest
+- [ ] 1.2a Add the `.github/actions/setup-tools` composite action (devbox install, cache restore keyed per D7); verify a CI run restores caches on the second run
 - [ ] 1.3 Set `rust-version` in `Cargo.toml` to the pinned Alpine branch's rust and add a CI job that builds with that compiler through melange; verify the job fails on a deliberately newer-only API in a scratch commit
 
 ## 2. Static musl package (melange)
@@ -29,18 +30,23 @@
 - [ ] 5.1 Create `charts/hickory-filter/` (Chart.yaml with version = appVersion, `values.yaml` with `image.digest: ""`, `values.schema.json`, Deployment, Service 53→1053 UDP/TCP, ConfigMap rendered as TOML with checksum annotation, ServiceAccount); verify `helm lint` and schema validation of the default render pass
 - [ ] 5.2 Add the restricted security context, `httpGet` probes on `/health` and `/ready`, the `/tmp` emptyDir and the optional cache volume (emptyDir/PVC); verify the default render passes a `restricted` Pod Security check (e.g. a server-side dry run against a namespace labelled `restricted` in a local test cluster, or a policy linter)
 - [ ] 5.3 Add opt-in PDB, NetworkPolicy and ServiceMonitor, plus `ci/all-on-values.yaml`; verify lint and schema validation pass for that file too
-- [ ] 5.4 Implement `hack/chart-publish.sh` (temp copy, fill `image.digest`, `helm package`, `helm push` to `oci://<registry>/<owner>/charts`, write the chart digest; `DRY_RUN=1` packages only); verify a dry run produces a package whose rendered image is `…@<given digest>`
+- [ ] 5.4 Implement `hack/chart-publish.sh` (temp copy, fill `image.digest`, `helm package`, `helm push` to `oci://ghcr.io/backend-bunny/charts`, write the chart digest; `DRY_RUN=1` packages only); verify a dry run produces a package whose rendered image is `…@<given digest>`
 - [ ] 5.5 Write `charts/hickory-filter/README.md` (install from OCI, values reference, verification commands); verify every value named in it exists in `values.schema.json`
 
 ## 6. Release pipeline
 
-- [ ] 6.1 Implement `hack/check-version.sh` (tag = Cargo.toml = melange = Chart version/appVersion = `--version` output); verify it fails on each kind of mismatch
+- [ ] 6.1 Implement `hack/check-version.sh [tag]` (tag = Cargo.toml = melange = Chart version/appVersion = `--version` output); verify it fails on each kind of mismatch
 - [ ] 6.2 Implement `hack/publish.sh` (`apko publish` with tags `X.Y.Z` and `sha-<short>`, resolve and write the index digest; `DRY_RUN=1` prints the tags); verify the dry run lists exactly those two tags
-- [ ] 6.3 Write CI for pull requests (`contents: read` only: Rust checks, cargo-deny, chart checks, build, smoke test, publish dry run, a pinned-action check, a self-contained-docs grep); verify a PR run passes and has no write or OIDC permission
-- [ ] 6.4 Write the release workflow per D4 (sign the index, attest SBOM + notices + provenance, publish chart, sign + provenance for the chart, append digests and verify commands to the release notes) with permissions only on that job; verify with a first pre-release tag that `cosign verify`, `cosign verify-attestation --type spdxjson`, the notices type and the provenance verification all succeed for both digests
-- [ ] 6.5 Document verification and the runtime contract in README.md (image, chart, attestation types, pin by digest); verify the documented commands succeed against the pre-release from 6.4
+- [ ] 6.3 Implement `hack/check-commits.sh` (PR title and every commit subject match `type(scope)!: subject`); verify it rejects "update stuff" and accepts `fix(deps): bump x`
+- [ ] 6.4 Write `ci.yml` per D8 (`contents: read` only; jobs `conventional-commits`, `rust`, `chart`, `image`, and `ci-ok` aggregating them; pinned-action check; self-contained-docs grep); verify a PR run passes, has no write or OIDC permission, and `ci-ok` fails when one job is made to fail
+- [ ] 6.5 Add `release-please-config.json`, `.release-please-manifest.json` and the `x-release-please-version` markers in `melange.yaml` and `Chart.yaml`, and write `release-please.yml` (opens the release PR, dispatches `ci.yml` on its branch, and on merge tags, creates the Release and calls `release.yml`); verify the first release PR bumps `Cargo.toml`, `Cargo.lock`, `melange.yaml` and the chart together and `hack/check-version.sh` passes on it
+- [ ] 6.6 Write `release.yml` per D4 (`workflow_call` and `workflow_dispatch` with a tag; sign the index, attest SBOM + notices + provenance, publish chart, sign + provenance for the chart, append digests and verify commands to the release notes) with permissions only on the publish job; verify with a first pre-release that `cosign verify`, `cosign verify-attestation --type spdxjson`, the notices type and the provenance verification all succeed for both digests, and that a hand-pushed tag publishes nothing
+- [ ] 6.7 Add `renovate.json` per D8 (actions pinned by digest, grouped crate/toolchain/action PRs with the commit types from the design, Alpine branch bumps behind approval, weekly lockfile maintenance); verify the config validates and a sample bump's commit type matches
+- [ ] 6.8 Document verification, the runtime contract and the release flow (merge the release PR) in README.md (image, chart, attestation types, pin by digest); verify the documented commands succeed against the pre-release from 6.6
 
 ## Workflow follow-up
 
-- Decide repo hosting (registry/owner paths) and the release PR tool before 6.4.
+- One-time repository settings before 6.5: allow Actions to create and approve pull requests, allow OIDC for workflows, require `ci-ok` on `main`. After the first publish, set the GHCR image and chart packages public if intended.
+- Staging: if `.github/` can't be written from an agent session, stage the workflow files elsewhere and have a maintainer move them.
+- Ship Wolfi package updates with a `task lock` PR before the release PR.
 - Archive after the first release verifies, and check the archived specs in `openspec/specs/`.

@@ -2,7 +2,11 @@
 
 use std::{path::PathBuf, process::ExitCode};
 
-use hickory_filter::config::{Config, DEFAULT_CONFIG_PATH};
+use hickory_filter::{
+    config::{Config, DEFAULT_CONFIG_PATH},
+    server,
+};
+use tokio::signal::unix::{SignalKind, signal};
 
 const USAGE: &str = "\
 usage: hickory-filter [--config <file>] [--check]
@@ -70,7 +74,7 @@ fn main() -> ExitCode {
 
 fn run(path: &std::path::Path, check: bool) -> ExitCode {
     // A configuration error stops startup (fail closed).
-    let _config = match Config::load(path) {
+    let config = match Config::load(path) {
         Ok(config) => config,
         Err(e) => {
             eprintln!("error: {e}");
@@ -81,8 +85,57 @@ fn run(path: &std::path::Path, check: bool) -> ExitCode {
         println!("{}: configuration ok", path.display());
         return ExitCode::SUCCESS;
     }
-    eprintln!("error: serving is not implemented yet; use --check to validate a configuration");
-    ExitCode::FAILURE
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(e) => {
+            eprintln!("error: cannot start the async runtime: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    runtime.block_on(serve(&config))
+}
+
+/// Serve until SIGTERM or SIGINT, then shut down within the grace period.
+async fn serve(config: &Config) -> ExitCode {
+    let mut terminate = match signal(SignalKind::terminate()) {
+        Ok(signal) => signal,
+        Err(e) => {
+            eprintln!("error: cannot listen for SIGTERM: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut interrupt = match signal(SignalKind::interrupt()) {
+        Ok(signal) => signal,
+        Err(e) => {
+            eprintln!("error: cannot listen for SIGINT: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let running = match server::start(config).await {
+        Ok(running) => running,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let addrs: Vec<String> = running.addrs().iter().map(ToString::to_string).collect();
+    eprintln!("{} listening on {}", version_line(), addrs.join(", "));
+    for (address, reason) in running.skipped() {
+        eprintln!("note: not listening on {address}: {reason}");
+    }
+
+    tokio::select! {
+        _ = terminate.recv() => eprintln!("received SIGTERM, shutting down"),
+        _ = interrupt.recv() => eprintln!("received SIGINT, shutting down"),
+    }
+    if !running.shutdown(server::SHUTDOWN_GRACE).await {
+        eprintln!("note: some queries were still in flight after the grace period");
+    }
+    ExitCode::SUCCESS
 }
 
 #[cfg(test)]

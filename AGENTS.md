@@ -48,7 +48,11 @@ in `openspec/changes/`. Use the `openspec-*` skills (`.claude/skills/` →
   `add-release-packaging` change for details.
 - **Conventional Commits.** PR titles and commit subjects are
   `type(scope)!: subject`; CI enforces it because they set the version.
-- **Never push to `main` directly.** Branch, PR, `ci-ok` green.
+- **Never push to `main` directly.** Branch, PR, `ci-ok` green. Agents may
+  merge their own PRs through GitHub (squash, keeping the Conventional
+  Commit title) once every required check has passed and the change meets
+  its spec. Release PRs (`chore: release X.Y.Z`) are the exception: a human
+  merges those, because merging one publishes.
 - **Pin everything.** Actions by full SHA with a version comment, the
   toolchain in `devbox.json` + `devbox.lock`, crates in `Cargo.lock`. CI and
   local tasks call the same `hack/` scripts.

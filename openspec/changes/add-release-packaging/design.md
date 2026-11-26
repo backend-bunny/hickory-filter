@@ -81,10 +81,12 @@ release.yml (also workflow_dispatch with an existing tag, to retry)
 - *Alternative:* `cargo about` (template-driven). Viable, but one more pinned tool. The script also handles the reviewed-exception list and the musl entry.
 
 ### D6. Helm chart layout
-`charts/hickory-filter/` with `values.schema.json` (fails on unknown or invalid values), templates for Deployment, Service, ConfigMap, ServiceAccount, and opt-in PDB, NetworkPolicy and ServiceMonitor.
+`charts/hickory-filter/` with `values.schema.json` (fails on unknown or invalid values), templates for Deployment, Service, ConfigMap, ServiceAccount, and opt-in PDB, NetworkPolicy, ServiceMonitor, PodMonitor and the Grafana dashboard resources.
 - The config is rendered from `values.config` (a map, serialised to TOML), or read from `existingConfigMap`. A `checksum/config` annotation rolls the pods on change.
 - The security context defaults meet `restricted` Pod Security. `/tmp` is an `emptyDir`, and the cache is an optional `emptyDir` or PVC.
 - Service: `port: 53` → `targetPort: 1053`, UDP and TCP, plus an HTTP port for metrics.
+- Discovery and monitoring: every resource gets the recommended `app.kubernetes.io/*` labels (from a shared helper), pods take `podLabels` and `podAnnotations`, and the Service takes annotations, so collectors that discover workloads by label or annotation need no chart changes. The HTTP port is named `http` on the pod and the Service. The `ServiceMonitor` and `PodMonitor` (Prometheus Operator resources) share one set of options (interval, scrape timeout, labels, relabelings, metric relabelings); a telemetry collector with a Prometheus receiver can scrape through annotations or, with a target allocator, through these resources, so no collector-specific resource is rendered. The chart README gives example values for both. An alerting `PrometheusRule` and a native OTLP exporter are not included here.
+- Dashboards: the dashboard file lives in `charts/hickory-filter/dashboards/` (from `add-grafana-dashboard`) and is embedded with `.Files.Get` by an optional `GrafanaDashboard` resource and an optional labelled ConfigMap. The `GrafanaDashboard` kind has no schema in the usual Kubernetes schema sets, so chart validation skips that one kind by name rather than ignoring missing schemas in general; its fields are checked against the operator's published CRD when the template is written.
 - Validation: `helm lint` and a Kubernetes schema validator (pinned) over default and `ci/all-on-values.yaml` renders. In the image smoke test the chart isn't installed; cluster install is checked with a kind-style test only if added later.
 
 ### D7. Pinned toolchain manifest and dev environment

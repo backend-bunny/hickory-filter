@@ -67,6 +67,51 @@ The packaged chart SHALL be pushed to an OCI registry at `oci://ghcr.io/backend-
 - **WHEN** a user runs `helm install dns oci://ghcr.io/backend-bunny/charts/hickory-filter --version X.Y.Z`
 - **THEN** the release installs with the pinned image
 
+### Requirement: Standard labels and extra metadata
+Every resource the chart renders SHALL carry the recommended Kubernetes labels (`app.kubernetes.io/name`, `app.kubernetes.io/instance`, `app.kubernetes.io/version` and `app.kubernetes.io/managed-by`). Values SHALL allow extra labels and annotations on the pods (`podLabels`, `podAnnotations`) and annotations on the Service, so that scraping, log and telemetry collectors that discover workloads by label or annotation can find them.
+
+#### Scenario: Recommended labels
+- **WHEN** the chart is rendered with default values
+- **THEN** every resource has the four recommended labels, with the chart's app version as `version`
+
+#### Scenario: Pod annotations for a collector
+- **GIVEN** `podAnnotations` and `podLabels` are set
+- **WHEN** the chart is rendered
+- **THEN** the pod template carries them, next to the config checksum annotation, which is unchanged
+
+### Requirement: Metrics scraping resources
+The chart SHALL name the HTTP port on the pod and the Service. It SHALL offer, each off by default, a Prometheus Operator `ServiceMonitor` and, as an alternative that needs no Service, a `PodMonitor`, each scraping `/metrics` with a configurable interval and scrape timeout, extra labels (so an operator's selector matches the resource) and relabelings and metric relabelings. Enabling either with the HTTP endpoint disabled in the configuration SHALL fail the render with a message saying so.
+
+#### Scenario: PodMonitor opt-in
+- **WHEN** the chart is rendered with the PodMonitor enabled and an interval of 30 seconds
+- **THEN** a PodMonitor selecting the chart's pods and scraping `/metrics` on the named HTTP port every 30 seconds is included
+
+#### Scenario: Monitor labels
+- **GIVEN** `serviceMonitor.labels` sets `release: monitoring`
+- **WHEN** the chart is rendered with the ServiceMonitor enabled
+- **THEN** the ServiceMonitor carries that label
+
+#### Scenario: Endpoint disabled
+- **WHEN** a monitor is enabled and the configuration disables the HTTP endpoint
+- **THEN** rendering fails with a message that the metrics endpoint is disabled
+
+### Requirement: Optional Grafana dashboard resources
+The chart SHALL offer, each off by default, a `GrafanaDashboard` custom resource for the Grafana operator (`grafana.integreatly.org`) and a ConfigMap labelled for the Grafana sidecar dashboard loader, each carrying the dashboard file packaged in the chart's `dashboards/` directory. The operator resource SHALL take its instance selector and folder from values, and the ConfigMap's label and namespace SHALL be configurable.
+
+#### Scenario: Operator resource
+- **GIVEN** the operator resource is enabled with an instance selector
+- **WHEN** the chart is rendered
+- **THEN** a `GrafanaDashboard` with that instance selector and the packaged dashboard JSON is included
+
+#### Scenario: Sidecar ConfigMap
+- **GIVEN** the dashboard ConfigMap is enabled with the label `grafana_dashboard: "1"`
+- **WHEN** the chart is rendered
+- **THEN** a ConfigMap with that label holding the packaged dashboard JSON is included
+
+#### Scenario: Off by default
+- **WHEN** the chart is rendered with default values
+- **THEN** no `GrafanaDashboard` and no dashboard ConfigMap is rendered
+
 ### Requirement: Chart validated in CI
 Every change SHALL lint the chart and validate its rendered manifests against the Kubernetes API schemas, for the default values and for a values file that enables every optional resource.
 

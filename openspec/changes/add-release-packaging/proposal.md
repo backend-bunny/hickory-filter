@@ -8,7 +8,7 @@ hickory-filter is meant to run on Kubernetes. Operators need an image and a Helm
 
 - **Container image** built from source with melange (binary → APK) and apko (APK → image), with no Dockerfile. The binary is **statically linked against musl** and the runtime image is distroless: the binary, CA certificates and nothing else (no shell, no libc, no package manager). It runs as non-root uid/gid 65532.
 - **Reproducible inputs**: the build is offline from vendored crates (`Cargo.lock`, `--locked`), the runtime package set comes from a committed apko lockfile, build tools are pinned, and melange signing keys are throwaway per build.
-- **Helm chart** for Kubernetes, published as an **OCI artifact**. A released chart pins the image digest it was released with, and its defaults pass the `restricted` Pod Security Standard.
+- **Helm chart** for Kubernetes, published as an **OCI artifact**. A released chart pins the image digest it was released with, and its defaults pass the `restricted` Pod Security Standard. It carries the recommended labels and extra pod metadata for collectors, opt-in `ServiceMonitor` and `PodMonitor` resources, and opt-in Grafana dashboard resources.
 - **Supply chain**: the image index and the chart are both **signed keylessly** with cosign and carry **SLSA build provenance**. The image also carries an **SPDX SBOM** (including the Rust crates, via cargo-auditable) and a **license notices** attestation.
 - **License notices** for every crate linked into the binary, also shipped as a file inside the image. CI fails on a crate whose license isn't on an allowlist.
 - **Reproducible dev environment**: one pinned toolchain manifest (devbox) shared by local work and CI, and a Taskfile whose tasks call the same `hack/` scripts CI runs.

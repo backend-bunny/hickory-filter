@@ -28,7 +28,7 @@ fn write_config(dir: &Path, listen: &str) -> std::path::PathBuf {
     std::fs::write(
         &path,
         format!(
-            "listen = [\"{listen}\"]\nupstreams = [\"127.0.0.1:9\"]\n[filter]\nrules = [\"block domain ads.example\"]\n"
+            "listen = [\"{listen}\"]\nupstreams = [\"127.0.0.1:9\"]\nhttp = \"127.0.0.1:0\"\n[filter]\nrules = [\"block domain ads.example\"]\n"
         ),
     )
     .expect("write config");
@@ -82,6 +82,17 @@ impl Process {
             .unwrap_or_else(|e| panic!("{text:?}: {e}"))
     }
 
+    /// The address from the `http endpoint on` line.
+    fn http_addr(&self) -> SocketAddr {
+        let line = self.wait_for_line("http endpoint on");
+        let text = line.split("http endpoint on ").nth(1).expect("an address");
+        text.split_whitespace()
+            .next()
+            .expect("an address")
+            .parse()
+            .unwrap_or_else(|e| panic!("{text:?}: {e}"))
+    }
+
     fn signal(&self, name: &str) {
         let status = Command::new("kill")
             .arg(format!("-{name}"))
@@ -114,6 +125,23 @@ impl Drop for Process {
     }
 }
 
+/// The status line of a plain `GET` to the HTTP endpoint.
+fn http_status_line(addr: SocketAddr, path: &str) -> String {
+    use std::io::{Read, Write};
+    let mut stream = std::net::TcpStream::connect(addr).expect("connect");
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("timeout");
+    write!(
+        stream,
+        "GET {path} HTTP/1.1\r\nHost: test\r\nConnection: close\r\n\r\n"
+    )
+    .expect("write");
+    let mut response = String::new();
+    stream.read_to_string(&mut response).expect("read");
+    response.lines().next().unwrap_or("").to_owned()
+}
+
 fn blocked_answer(server: SocketAddr) -> bool {
     let mut message = Message::query();
     message.metadata.id = 1;
@@ -141,6 +169,10 @@ fn exits_zero_on(signal: &str) {
     let mut process = spawn(&config);
     let addr = process.listening_addr();
     assert!(blocked_answer(addr), "the binary serves");
+    let http = process.http_addr();
+    assert!(http_status_line(http, "/health").contains("200"));
+    assert!(http_status_line(http, "/ready").contains("200"));
+    assert!(http_status_line(http, "/metrics").contains("200"));
 
     process.signal(signal);
     let (status, took) = process.wait_exit(Duration::from_secs(15));

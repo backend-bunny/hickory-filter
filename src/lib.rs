@@ -6,6 +6,7 @@ pub mod cache;
 pub mod config;
 pub mod fetch;
 pub mod filter_handler;
+pub mod forwarder;
 pub mod lists;
 pub mod refresh;
 pub mod rules;

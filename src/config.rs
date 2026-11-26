@@ -93,6 +93,19 @@ impl Config {
         Ok(config)
     }
 
+    /// The inline rules (`filter.rules`) as parsed rules. Every rule was
+    /// validated when the configuration loaded, so none is dropped here.
+    pub fn inline_rules(&self) -> Vec<crate::rules::Rule> {
+        self.filter
+            .rules
+            .iter()
+            .filter_map(|line| match crate::rules::parse_rule_line(line) {
+                Ok(crate::rules::RuleLine::Rule(rule)) => Some(rule),
+                _ => None,
+            })
+            .collect()
+    }
+
     fn validate(&self, file: &Path) -> Result<(), ConfigError> {
         let invalid = |key: &'static str, reason: &str| ConfigError::Invalid {
             file: file.to_owned(),

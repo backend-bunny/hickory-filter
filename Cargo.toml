@@ -1,0 +1,11 @@
+[package]
+name = "hickory-filter"
+version = "0.1.0"
+edition = "2024"
+description = "A filtering DNS forwarder: allow/block rules, list formats and scheduled blocklist refresh"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/backend-bunny/hickory-filter"
+publish = false
+
+[lints.rust]
+unsafe_code = "forbid"

@@ -15,9 +15,9 @@
 
 ## 3. Runtime image (apko)
 
-- [ ] 3.1 Write `apko.yaml` (Wolfi + `@local`, `hickory-filter@local`, `ca-certificates-bundle`, uid/gid 65532, entrypoint, `/etc/hickory-filter`, `/tmp`, OCI annotations, x86_64) and `hack/lock.sh`; generate and commit `apko.lock.json`; verify `apko build --lockfile` succeeds and the image has no `/bin/sh`
-- [ ] 3.2 Implement `hack/lockfile.py merge` (adds `@local` packages, fails when the config or the resolved Wolfi set drifts from the committed lock); verify unit tests for an unchanged lock, an added package without relock, and a dropped package
-- [ ] 3.3 Write `hack/test.sh` (the image smoke test: user 65532, annotations, no shell, static binary, DNS answers for blocked and unblocked names against a local upstream, `/health` and `/ready`, all caps dropped, read-only rootfs); verify it passes on a fresh build and fails on an image missing an annotation
+- [x] 3.1 Write `apko.yaml` (Wolfi + `@local`, `hickory-filter@local`, `ca-certificates-bundle`, uid/gid 65532, entrypoint, `/etc/hickory-filter`, `/tmp`, OCI annotations, x86_64) and `hack/lock.sh`; generate and commit `apko.lock.json`; verify `apko build --lockfile` succeeds and the image has no `/bin/sh`
+- [x] 3.2 Implement `hack/lockfile.py merge` (adds `@local` packages, fails when the config or the resolved Wolfi set drifts from the committed lock); verify unit tests for an unchanged lock, an added package without relock, and a dropped package
+- [x] 3.3 Write `hack/test.sh` (the image smoke test: user 65532, annotations, no shell, static binary, DNS answers for blocked and unblocked names against a local upstream, `/health` and `/ready`, all caps dropped, read-only rootfs); verify it passes on a fresh build and fails on an image missing an annotation
 
 ## 4. License notices
 

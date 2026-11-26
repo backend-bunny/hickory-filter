@@ -1,0 +1,18 @@
+name: Set up the pinned toolchain
+description: Install the devbox toolchain (devbox.json + devbox.lock) and restore build caches.
+runs:
+  using: composite
+  steps:
+    - uses: jetify-com/devbox-install-action@05e954310554b6122a26b4880d69937f61b1eb2e # v0.16.0
+      with:
+        enable-cache: true
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+          .cache
+        key: build-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'melange.yaml', 'apko.lock.json', 'devbox.lock') }}
+        restore-keys: |
+          build-${{ runner.os }}-

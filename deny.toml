@@ -1,0 +1,18 @@
+# License allowlist for every crate linked into the binary. Adding a license
+# here is a reviewed change. Run with: cargo deny check licenses
+[graph]
+targets = ["x86_64-unknown-linux-musl"]
+
+[licenses]
+confidence-threshold = 0.9
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-3.0",
+  "Zlib",
+  "MPL-2.0",
+]

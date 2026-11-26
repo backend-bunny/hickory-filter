@@ -5,11 +5,46 @@ library. It answers queries for blocked names itself, forwards everything
 else to upstream resolvers, and keeps its blocklists current by fetching them
 from web servers on a schedule.
 
-> **Status: design.** Nothing is implemented yet. The design lives in
-> [`openspec/`](openspec/): start with the open change under
-> `openspec/changes/`.
+> **Status.** The DNS server is implemented: filtering, lists with scheduled
+> refresh, forwarding, metrics and logs. The container image, the Helm chart
+> and signed releases are still planned (see Packaging below). The design lives
+> in [`openspec/`](openspec/).
 
-## Features (planned)
+## Quick start
+
+Write a configuration. Only `upstreams` is required; give it your resolver's
+IP address:
+
+```toml
+upstreams = ["192.0.2.53"]
+
+[filter]
+rules = ["block wildcard *.ads.example", "allow domain ok.ads.example"]
+```
+
+Check it, then run it:
+
+```sh
+hickory-filter --config config.toml --check
+hickory-filter --config config.toml
+```
+
+By default it answers DNS on port 1053 (UDP and TCP, all addresses) and serves
+`/health`, `/ready` and `/metrics` on port 8080. Try it:
+
+```sh
+dig @127.0.0.1 -p 1053 x.ads.example     # blocked: 0.0.0.0
+dig @127.0.0.1 -p 1053 ok.ads.example    # allowed: forwarded
+curl -s localhost:8080/ready
+```
+
+`--version` prints the version and `--help` the options. SIGTERM or SIGINT
+stops accepting queries, gives the ones in flight up to five seconds, and exits
+with status 0. A configuration error, a listen address that can't be bound, or
+a list marked `required` that can't be loaded stops startup with the reason on
+stderr.
+
+## Features
 
 **Rules.** Each rule is `allow` or `block`, and **allow always wins**.
 
@@ -50,7 +85,7 @@ last refresh time and result), `/health`, and `/ready` (ready only after the
 first successful rule load). Runs as non-root, binds ports ≥ 1024 by default,
 needs no writable root filesystem, and logs to stderr.
 
-## How it works (planned)
+## How it works
 
 A standalone binary using `hickory-server` as a library:
 
@@ -82,7 +117,38 @@ A standalone binary using `hickory-server` as a library:
 One TOML file, `--config <file>` (default `/etc/hickory-filter/config.toml`).
 Unknown keys, invalid values and unreadable files stop startup with an error
 naming the file, the key and the reason. `--check` validates the file and
-exits without serving. See `examples/hickory-filter.toml` for every key.
+exits without serving. `examples/hickory-filter.toml` is an annotated example
+with every key, and the end-to-end tests run the binary from it.
+
+### Configuration reference
+
+Keys of the `[filter]`, `[filter.response]`, `[log]` and `[[filter.lists]]`
+tables are written with their table: `filter.refresh` is `refresh` in
+`[filter]`.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `listen` | `0.0.0.0:1053`, `[::]:1053` | DNS listen addresses, each answering UDP and TCP. An IPv6 address on a host without IPv6 is skipped with a note |
+| `upstreams` | required | Resolvers for names that aren't blocked, as IP addresses (forms below). At least one |
+| `cache_size` | `4096` | Most forwarded answers kept in the response cache, each for at most its TTL. `0` disables it |
+| `http` | `0.0.0.0:8080` | Address of the health, readiness and metrics endpoint, or `false` for none |
+| `log.level` | `info` | `error`, `warn`, `info`, `debug` or `trace` |
+| `log.format` | `text` | `text` or `json` (one object per line) |
+| `log.query_log` | `false` | One log line per answered query; see Metrics and logs |
+| `log.query_log_client` | `address` | How the client appears in query lines: `address`, `masked` or `omit` |
+| `filter.refresh` | `24h` | How often lists are re-fetched; `0` never |
+| `filter.bootstrap` | none | Resolver for list host names, as an IP address; the system resolver when unset. Never this server |
+| `filter.cache_dir` | none | Directory for the on-disk copy of each remote list. Nothing is written without it |
+| `filter.rules` | none | Inline rules, one line each, such as `block wildcard *.ads.example` |
+| `filter.response.mode` | `null` | What a blocked query gets: `null`, `address`, `nodata` or `nxdomain` |
+| `filter.response.ipv4` | none | The address for blocked A queries in `address` mode |
+| `filter.response.ipv6` | none | The address for blocked AAAA queries in `address` mode |
+| `filter.response.ttl` | `3600` | TTL of blocked answers, in seconds |
+| `filter.lists[].rule` | required | A list declaration, `<allow\|block> list <domain\|hosts\|wildcard\|regex> <url>` |
+| `filter.lists[].refresh` | `filter.refresh` | This list's refresh interval; `0` never |
+| `filter.lists[].required` | `false` | Fail startup if the list can't be loaded (a cached copy counts as loaded) |
+
+### Resolver addresses
 
 Upstream and bootstrap resolvers are IP addresses, never host names:
 

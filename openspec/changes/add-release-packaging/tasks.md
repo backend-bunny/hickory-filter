@@ -3,7 +3,7 @@
 ## 1. Project rules and toolchain
 
 - [ ] 1.1 Check AGENTS.md packaging rules (added with this proposal) against the final implementation and update any detail that changed; verify the self-contained-docs grep in 6.3 passes
-- [ ] 1.2 Add the pinned toolchain (`devbox.json` + `devbox.lock`: melange, apko, cosign, helm, schema validator, cargo-deny, bubblewrap, go-task, python3, jq, dev Rust), `.envrc`, `.gitignore` (build outputs, vendored crates, melange keys, devbox state), and a `Taskfile.yml` with build/test/lock/chart/publish-dry-run tasks calling `hack/`; verify `task --list` and each tool's `--version` run through the manifest
+- [x] 1.2 Add the pinned toolchain (`devbox.json` + `devbox.lock`: melange, apko, cosign, helm, schema validator, cargo-deny, bubblewrap, go-task, python, jq, dev Rust), `.envrc`, `.gitignore` (build outputs, vendored crates, melange keys, devbox state), and a `Taskfile.yml` with build/test/lock/chart/publish-dry-run tasks calling `hack/`; verify `task --list` and each tool's `--version` run through the manifest
 - [ ] 1.2a Add the `.github/actions/setup-tools` composite action (devbox install, cache restore keyed per D7); verify a CI run restores caches on the second run
 - [ ] 1.3 Set `rust-version` in `Cargo.toml` to the pinned Alpine branch's rust and add a CI job that builds with that compiler through melange; verify the job fails on a deliberately newer-only API in a scratch commit
 

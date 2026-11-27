@@ -19,7 +19,7 @@
   "packageRules": [
     {
       "description": "Conventional Commit types decide releases (release-please): crate and toolchain bumps ship as patch releases, action bumps don't release",
-      "matchManagers": ["cargo", "devbox", "github-actions", "custom.regex"],
+      "matchManagers": ["cargo", "devbox", "github-actions", "custom.regex", "rust-toolchain"],
       "semanticCommits": "enabled"
     },
     {
@@ -39,8 +39,8 @@
       "semanticCommitScope": "deps"
     },
     {
-      "description": "Build toolchain (devbox: rust, melange, apko, cosign, ...) in one PR",
-      "matchManagers": ["devbox"],
+      "description": "Build toolchain (devbox: rust, melange, apko, cosign, ...; rust-toolchain.toml) in one PR",
+      "matchManagers": ["devbox", "rust-toolchain"],
       "groupName": "build toolchain",
       "semanticCommitType": "fix",
       "semanticCommitScope": "deps"

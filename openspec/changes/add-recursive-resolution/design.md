@@ -86,7 +86,7 @@ The library primes lazily, at the first query. At startup, after the listeners a
 - [An open recursive listener can be used for amplification] → Same exposure as the open forwarder today, larger load; documented, access control left for a later change.
 - [Forged UDP answers for unsigned zones are only held off by random transaction IDs and source ports] → DNSSEC covers signed zones; 0x20 case randomization is a future improvement, once the library applies it
 - [Cache and recursion limits stay at the library defaults, which may be wrong for small deployments] → Measure memory with the dashboard and the existing memory benchmark, expose a knob only if the numbers ask for it.
-- [Bogus answers and other SERVFAILs look the same to a client] → Check whether the library tells them apart so a metric can; not required by the specs.
+- [Bogus answers and other SERVFAILs look the same to a client and in the metrics] → Checked in task 5.3: the library's DNSSEC counters are driven by the proof on records in a response, and an answer that fails validation is returned as an error, so `hickory_recursor_dnssec_bogus_answers_total` does not count it and a validation failure is indistinguishable from a network failure in the metrics (both are `upstream_error`). Telling them apart would need the library to report it. The README says so; testing a name with validation off tells the two apart.
 - [The hints file ages] → It is data in the repository, refreshed through a reviewed change, and the recursor replaces it with the live set after first contact.
 
 ## Future improvements
@@ -100,4 +100,3 @@ Nothing to migrate: forward mode is unchanged and recursive mode is opt-in. The 
 ## Open Questions
 
 - Whether the dashboard's panel titles should say "name servers" when recursion is on. The panels keep working either way, and the live check in task 6.4 decides.
-- Whether a failed validation can be counted separately from other failures (see Risks).

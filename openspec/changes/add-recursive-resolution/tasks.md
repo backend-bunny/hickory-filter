@@ -27,9 +27,9 @@
 
 ## 5. DNSSEC
 
-- [ ] 5.1 Spike how to produce signed fake zones for the harness with what the library already provides, and write down the finding next to the tests; verify a test that a signed fake zone, with its key as the trust anchor, validates
-- [ ] 5.2 Map `recursion.dnssec` (`validate` default with the built-in anchor, `off`, or a trust anchor file path); verify harness tests for a valid chain, a tampered answer (SERVFAIL), an unsigned zone (answered), validation off (answered) and a custom anchor file
-- [ ] 5.3 Check whether the library distinguishes validation failures from other failures; if it does, count them in a documented metric, otherwise record in the design that they can't be told apart; verify the decision is written in the design and, if a metric was added, tested and in the README table
+- [x] 5.1 Spike how to produce signed fake zones for the harness with what the library already provides, and write down the finding next to the tests; verify a test that a signed fake zone, with its key as the trust anchor, validates
+- [x] 5.2 Map `recursion.dnssec` (`validate` default with the built-in anchor, `off`, or a trust anchor file path); verify harness tests for a valid chain, a tampered answer (SERVFAIL), an unsigned zone (answered), validation off (answered) and a custom anchor file
+- [x] 5.3 Check whether the library distinguishes validation failures from other failures; if it does, count them in a documented metric, otherwise record in the design that they can't be told apart; verify the decision is written in the design and, if a metric was added, tested and in the README table
 
 ## 6. Packaging, documentation and checks
 

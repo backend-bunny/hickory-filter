@@ -6,6 +6,7 @@ pub mod authority;
 pub mod dns;
 pub mod netns;
 pub mod process;
+pub mod signed;
 
 use std::{
     collections::HashMap,

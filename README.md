@@ -220,9 +220,9 @@ described by the series below instead of `hickory_resolver_cache_hit_total` and
 | `hickory_recursor_response_cache_size` | gauge | | Entries in the response cache |
 | `hickory_recursor_outgoing_queries_total` | counter | | Queries sent to name servers while resolving |
 | `hickory_recursor_dnssec_secure_answers_total` | counter | | Answers validated as secure |
-| `hickory_recursor_dnssec_insecure_answers_total` | counter | | Answers validated as insecure (from zones without a secure delegation) |
+| `hickory_recursor_dnssec_insecure_answers_total` | counter | | Answers validated as insecure (from zones that are not signed) |
 | `hickory_recursor_dnssec_indeterminate_answers_total` | counter | | Answers whose security could not be determined |
-| `hickory_recursor_dnssec_bogus_answers_total` | counter | | Answers whose signatures are invalid; the client gets SERVFAIL |
+| `hickory_recursor_dnssec_bogus_answers_total` | counter | | Answers carrying a bogus proof. Answers rejected by validation are returned to the client as SERVFAIL and are not counted here: they show as `upstream_error` in `hickory_filter_queries_total`, like other failures |
 | `hickory_resolver_probe_attempts_total` | counter | `protocol` | Name servers probed for TLS |
 | `hickory_resolver_probe_successes_total` | counter | `protocol` | Probes that found TLS support |
 | `hickory_resolver_probe_timeouts_total` | counter | `protocol` | Probes that timed out |

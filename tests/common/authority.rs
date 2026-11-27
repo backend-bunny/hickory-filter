@@ -203,8 +203,8 @@ pub fn soa(zone: &str) -> Record {
         name(zone),
         300,
         RData::SOA(SOA::new(
-            name(&format!("ns.{zone}")),
-            name(&format!("hostmaster.{zone}")),
+            name(&format!("ns.{}", zone_suffix(zone))),
+            name(&format!("hostmaster.{}", zone_suffix(zone))),
             1,
             3600,
             600,
@@ -212,6 +212,11 @@ pub fn soa(zone: &str) -> Record {
             300,
         )),
     )
+}
+
+/// The zone's name for building names under it: the root is `root.`.
+fn zone_suffix(zone: &str) -> &str {
+    if zone == "." { "root." } else { zone }
 }
 
 /// NXDOMAIN with the zone's SOA.

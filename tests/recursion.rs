@@ -19,6 +19,7 @@ use common::{
     dns::ask_udp,
     netns,
     process::{Process, http_get, http_status_line, spawn, spawn_command},
+    signed::{Example, SignedHierarchy},
 };
 
 /// A server in recursive mode starting from the fake root. DNSSEC is off:
@@ -37,11 +38,17 @@ struct Server {
 fn write_config(dir: &Path, top: &str, recursion: &str, tables: &str) -> PathBuf {
     let hints = authority::write_hints(dir);
     let file = dir.join("config.toml");
+    // The fake zones are unsigned unless a test says otherwise.
+    let dnssec = if recursion.contains("dnssec") {
+        ""
+    } else {
+        "dnssec = \"off\"\n"
+    };
     std::fs::write(
         &file,
         format!(
             "mode = \"recursive\"\nlisten = [\"127.0.0.1:0\"]\nhttp = \"127.0.0.1:0\"\n{top}\n\
-             [recursion]\nroots = \"{}\"\ndnssec = \"off\"\n{recursion}\n{tables}\n",
+             [recursion]\nroots = \"{}\"\n{dnssec}{recursion}\n{tables}\n",
             hints.display()
         ),
     )
@@ -974,4 +981,161 @@ async fn recursive_mode_runs_in_the_restricted_container_and_writes_no_file() {
     }
     assert!(http_status_line(http, "/ready").contains(" 200"));
     assert_eq!(files(dir.path()), ["config.toml", "root.hints"]);
+}
+
+/// The spike for the DNSSEC tests: a signed hierarchy of real zones, with the
+/// root key as the trust anchor, validates, and the validation is counted.
+#[tokio::test]
+async fn a_signed_zone_validates_with_its_key_as_the_trust_anchor() {
+    let Some(_ns) = netns::enter(
+        "a_signed_zone_validates_with_its_key_as_the_trust_anchor",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    let hierarchy = SignedHierarchy::start(Example::Signed).await;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let anchor = hierarchy.write_anchor(dir.path());
+    let server = Server::start_in(
+        dir.path(),
+        "",
+        &format!("dnssec = \"{}\"\n", anchor.display()),
+        "",
+    );
+
+    let answer = server.ask("www.example.test.").await;
+    assert_eq!(
+        answer.metadata.response_code,
+        ResponseCode::NoError,
+        "{answer:?}"
+    );
+    assert_eq!(a_records(&answer), vec![authority::WWW]);
+    let metrics = server.metrics();
+    assert!(
+        metric(
+            &metrics,
+            "hickory_recursor_dnssec_secure_answers_total",
+            |_| true
+        ) >= 1.0,
+        "the answer was validated as secure:\n{metrics}"
+    );
+    assert!(!hierarchy.authority.seen().is_empty());
+}
+
+/// Start a signed hierarchy and a server that validates with its root key as
+/// the trust anchor, or with `dnssec` as the setting when one is given.
+async fn signed(
+    example: Example,
+    dnssec: Option<&str>,
+) -> (SignedHierarchy, Server, tempfile::TempDir) {
+    let hierarchy = SignedHierarchy::start(example).await;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let anchor = hierarchy.write_anchor(dir.path());
+    let setting = match dnssec {
+        Some(setting) => format!("dnssec = \"{setting}\"\n"),
+        None => format!("dnssec = \"{}\"\n", anchor.display()),
+    };
+    let server = Server::start_in(dir.path(), "", &setting, "");
+    (hierarchy, server, dir)
+}
+
+fn counter(server: &Server, name: &str) -> f64 {
+    metric(&server.metrics(), name, |_| true)
+}
+
+/// An answer whose signatures can't be trusted is SERVFAIL.
+#[tokio::test]
+async fn a_tampered_answer_is_servfail() {
+    let Some(_ns) = netns::enter("a_tampered_answer_is_servfail", &authority::addresses()) else {
+        return;
+    };
+    // The zone is signed with a key its DS record in the parent doesn't name.
+    let (_hierarchy, server, _dir) = signed(Example::WrongKey, None).await;
+    let answer = server.ask("www.example.test.").await;
+    assert_eq!(
+        answer.metadata.response_code,
+        ResponseCode::ServFail,
+        "{answer:?}"
+    );
+    assert!(answer.answers.is_empty(), "{answer:?}");
+    // The library returns an answer that fails validation as an error, so it
+    // is not counted by its DNSSEC series (the README says so): the failure
+    // shows as a query that ended in an upstream error.
+    assert_eq!(
+        metric(&server.metrics(), "hickory_filter_queries_total", |l| {
+            l.contains("outcome=\"upstream_error\"")
+        }),
+        1.0,
+        "{}",
+        server.metrics()
+    );
+}
+
+/// A zone with no signatures and no secure delegation is answered normally,
+/// and counted as insecure.
+#[tokio::test]
+async fn an_unsigned_zone_is_answered() {
+    let Some(_ns) = netns::enter("an_unsigned_zone_is_answered", &authority::addresses()) else {
+        return;
+    };
+    let (_hierarchy, server, _dir) = signed(Example::Unsigned, None).await;
+    let answer = server.ask("www.example.test.").await;
+    assert_eq!(
+        answer.metadata.response_code,
+        ResponseCode::NoError,
+        "{answer:?}"
+    );
+    assert_eq!(a_records(&answer), vec![authority::WWW]);
+    assert!(
+        counter(&server, "hickory_recursor_dnssec_insecure_answers_total") >= 1.0,
+        "{}",
+        server.metrics()
+    );
+    assert_eq!(
+        counter(&server, "hickory_recursor_dnssec_bogus_answers_total"),
+        0.0
+    );
+}
+
+/// With validation off the same tampered answer is returned.
+#[tokio::test]
+async fn with_validation_off_a_tampered_answer_is_returned() {
+    let Some(_ns) = netns::enter(
+        "with_validation_off_a_tampered_answer_is_returned",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    let (_hierarchy, server, _dir) = signed(Example::WrongKey, Some("off")).await;
+    let answer = server.ask("www.example.test.").await;
+    assert_eq!(
+        answer.metadata.response_code,
+        ResponseCode::NoError,
+        "{answer:?}"
+    );
+    assert_eq!(a_records(&answer), vec![authority::WWW]);
+    assert_eq!(
+        counter(&server, "hickory_recursor_dnssec_bogus_answers_total"),
+        0.0
+    );
+}
+
+/// By default the built-in root trust anchor is used, so a hierarchy rooted in
+/// a key that isn't the real root key is rejected.
+#[tokio::test]
+async fn the_built_in_trust_anchor_is_used_by_default() {
+    let Some(_ns) = netns::enter(
+        "the_built_in_trust_anchor_is_used_by_default",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    let (_hierarchy, server, _dir) = signed(Example::Signed, Some("validate")).await;
+    let answer = server.ask("www.example.test.").await;
+    assert_eq!(
+        answer.metadata.response_code,
+        ResponseCode::ServFail,
+        "{answer:?}"
+    );
+    assert!(answer.answers.is_empty());
 }

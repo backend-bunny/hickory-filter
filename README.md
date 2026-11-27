@@ -203,6 +203,31 @@ views come from the query log below.
 The list `url` label has credentials removed, and a query string is shown as
 `?…`. A list that has not been loaded yet has no series.
 
+#### Recursive mode metrics
+
+In recursive mode the name servers that are contacted take the place of the
+upstreams: `hickory_resolver_outgoing_queries_total` and
+`hickory_resolver_name_server_query_responses_total` above count queries to
+them and their outcomes, and the `protocol` label tells how much traffic was
+encrypted (`tls`) and how much was plain (`udp`, `tcp`). The response cache is
+described by the series below instead of `hickory_resolver_cache_hit_total` and
+`hickory_resolver_cache_miss_total`.
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `hickory_recursor_cache_hit_total` | counter | | Queries answered from the response cache |
+| `hickory_recursor_cache_miss_total` | counter | | Queries that had to be resolved |
+| `hickory_recursor_response_cache_size` | gauge | | Entries in the response cache |
+| `hickory_recursor_outgoing_queries_total` | counter | | Queries sent to name servers while resolving |
+| `hickory_recursor_dnssec_secure_answers_total` | counter | | Answers validated as secure |
+| `hickory_recursor_dnssec_insecure_answers_total` | counter | | Answers validated as insecure (from zones without a secure delegation) |
+| `hickory_recursor_dnssec_indeterminate_answers_total` | counter | | Answers whose security could not be determined |
+| `hickory_recursor_dnssec_bogus_answers_total` | counter | | Answers whose signatures are invalid; the client gets SERVFAIL |
+| `hickory_resolver_probe_attempts_total` | counter | `protocol` | Name servers probed for TLS |
+| `hickory_resolver_probe_successes_total` | counter | `protocol` | Probes that found TLS support |
+| `hickory_resolver_probe_timeouts_total` | counter | `protocol` | Probes that timed out |
+| `hickory_resolver_probe_errors_total` | counter | `protocol` | Probes that failed with an error |
+
 ### Query log
 
 The query log is off by default. Queries are then logged only at the `debug`

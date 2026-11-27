@@ -13,7 +13,7 @@ use common::{
     authority::{self, Hierarchy},
     dns::ask_udp,
     netns,
-    process::{Process, http_get, spawn},
+    process::{Process, http_get, http_status_line, spawn},
 };
 
 /// A server in recursive mode starting from the fake root. DNSSEC is off:
@@ -57,6 +57,21 @@ impl Server {
     fn metrics(&self) -> String {
         let response = http_get(self.http, "/metrics");
         response.split("\r\n\r\n").nth(1).unwrap_or("").to_owned()
+    }
+
+    fn status(&self, path: &str) -> String {
+        http_status_line(self.http, path)
+    }
+
+    /// Wait until `/ready` answers 200.
+    async fn wait_ready(&self) {
+        for _ in 0..300 {
+            if self.status("/ready").contains(" 200") {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        panic!("/ready never answered 200: {}", self.status("/ready"));
     }
 
     async fn ask(&self, name: &str) -> Message {
@@ -392,4 +407,188 @@ async fn a_delegation_to_a_private_address_is_not_contacted() {
         "nothing was sent to the private address: {:?}",
         spy.seen()
     );
+}
+
+/// Root servers that never answer keep `/ready` at 503, while the server is
+/// alive and `/health` says so: a network that blocks DNS shows up as a pod
+/// that never becomes ready.
+#[tokio::test]
+async fn unreachable_roots_keep_the_server_not_ready() {
+    let Some(_ns) = netns::enter(
+        "unreachable_roots_keep_the_server_not_ready",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    // Nothing listens at the root's address.
+    let server = Server::start("", "", "");
+    for _ in 0..3 {
+        assert!(
+            server.status("/health").contains(" 200"),
+            "{}",
+            server.status("/health")
+        );
+        assert!(
+            server.status("/ready").contains(" 503"),
+            "{}",
+            server.status("/ready")
+        );
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+}
+
+/// `/ready` turns 200 when a root server answers.
+#[tokio::test]
+async fn the_server_is_ready_once_a_root_server_answers() {
+    let Some(_ns) = netns::enter(
+        "the_server_is_ready_once_a_root_server_answers",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    let _hierarchy = Hierarchy::start().await;
+    let server = Server::start("", "", "");
+    server.wait_ready().await;
+    assert!(server.status("/ready").contains(" 200"));
+}
+
+/// Once ready, a later resolution failure doesn't flip `/ready` back.
+#[tokio::test]
+async fn a_later_resolution_failure_leaves_the_server_ready() {
+    let Some(_ns) = netns::enter(
+        "a_later_resolution_failure_leaves_the_server_ready",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    let hierarchy = Hierarchy::start().await;
+    let server = Server::start("", "", "");
+    server.wait_ready().await;
+
+    // The whole hierarchy goes away; a name that was never asked for fails.
+    drop(hierarchy);
+    let answer = server.ask("ads.example.test.").await;
+    assert_eq!(
+        answer.metadata.response_code,
+        ResponseCode::ServFail,
+        "{answer:?}"
+    );
+    assert!(
+        server.status("/ready").contains(" 200"),
+        "{}",
+        server.status("/ready")
+    );
+}
+
+/// One scraped sample: the metric's name, its label keys and its value.
+fn samples(text: &str) -> Vec<(String, Vec<String>, f64)> {
+    text.lines()
+        .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+        .filter_map(|line| {
+            let (series, value) = line.rsplit_once(' ')?;
+            let (name, labels) = match series.split_once('{') {
+                Some((name, rest)) => (
+                    name,
+                    rest.trim_end_matches('}')
+                        .split(',')
+                        .filter_map(|pair| pair.split_once('=').map(|(k, _)| k.to_owned()))
+                        .collect(),
+                ),
+                None => (series, Vec::new()),
+            };
+            Some((name.to_owned(), labels, value.parse().ok()?))
+        })
+        .collect()
+}
+
+/// In recursive mode the response cache and the name servers contacted are
+/// visible in the metrics, and the README documents exactly the series it names.
+#[tokio::test]
+async fn recursive_mode_metrics_show_the_cache_and_the_name_servers() {
+    let Some(_ns) = netns::enter(
+        "recursive_mode_metrics_show_the_cache_and_the_name_servers",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    let _hierarchy = Hierarchy::start().await;
+    let server = Server::start("", "", "");
+    assert_eq!(
+        a_records(&server.ask("www.example.test.").await),
+        vec![authority::WWW]
+    );
+    let first = server.metrics();
+    assert_eq!(
+        a_records(&server.ask("www.example.test.").await),
+        vec![authority::WWW]
+    );
+    let second = server.metrics();
+
+    // Name servers were contacted over plain UDP and none timed out (a negative
+    // answer, such as no data, is a normal response).
+    assert!(
+        metric(&first, "hickory_resolver_outgoing_queries_total", |l| l
+            .contains("protocol=\"udp\""))
+            >= 3.0,
+        "{first}"
+    );
+    assert!(
+        metric(
+            &first,
+            "hickory_resolver_name_server_query_responses_total",
+            |l| l.contains("status=\"success\"")
+        ) >= 3.0
+    );
+    assert_eq!(
+        metric(
+            &first,
+            "hickory_resolver_name_server_query_responses_total",
+            |l| l.contains("status=\"timeout\"")
+        ),
+        0.0,
+        "no name server timed out:\n{first}"
+    );
+
+    // The second query is a cache hit and sends nothing to a name server.
+    assert_eq!(
+        metric(&second, "hickory_recursor_cache_hit_total", |_| true)
+            - metric(&first, "hickory_recursor_cache_hit_total", |_| true),
+        1.0
+    );
+    assert_eq!(
+        metric(&second, "hickory_recursor_outgoing_queries_total", |_| true),
+        metric(&first, "hickory_recursor_outgoing_queries_total", |_| true)
+    );
+
+    // Every documented recursive-mode series is exported with the documented
+    // labels and type.
+    let exported = samples(&second);
+    for row in common::readme_table("#### Recursive mode metrics") {
+        let name = common::backticked(&row[0])[0].clone();
+        let kind = row[1].clone();
+        let labels = common::backticked(&row[2]);
+        assert!(
+            second.contains(&format!("# TYPE {name} {kind}")),
+            "{name} is not exported as a {kind}:\n{second}"
+        );
+        let series: Vec<_> = exported.iter().filter(|(n, _, _)| *n == name).collect();
+        assert!(
+            !series.is_empty(),
+            "documented metric {name} is not exported"
+        );
+        for label in &labels {
+            assert!(
+                series.iter().any(|(_, l, _)| l.contains(label)),
+                "label {label} never appears on {name}"
+            );
+        }
+        for (_, l, _) in &series {
+            for key in l {
+                assert!(
+                    labels.contains(key),
+                    "{name} has the undocumented label {key}"
+                );
+            }
+        }
+    }
 }

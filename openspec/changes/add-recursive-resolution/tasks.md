@@ -16,8 +16,8 @@
 
 ## 3. Readiness and metrics
 
-- [ ] 3.1 Resolve one query through the recursive handler at startup with retries and backoff, and keep `/ready` at 503 until it succeeds, without letting later failures flip it back; verify harness tests with unreachable roots (503), answering roots (200) and a later failure (still 200)
-- [ ] 3.2 Confirm the library's outgoing query, name server response and cache series are exposed in recursive mode with the existing names and labels, and extend the README metric descriptions to say what the upstream series mean there; verify a metrics test in recursive mode and the README drift tests
+- [x] 3.1 Resolve one query through the recursive handler at startup with retries and backoff, and keep `/ready` at 503 until it succeeds, without letting later failures flip it back; verify harness tests with unreachable roots (503), answering roots (200) and a later failure (still 200)
+- [x] 3.2 Confirm the library's outgoing query, name server response and cache series are exposed in recursive mode with the existing names and labels, and extend the README metric descriptions to say what the upstream series mean there; verify a metrics test in recursive mode and the README drift tests
 
 ## 4. Privacy defaults
 

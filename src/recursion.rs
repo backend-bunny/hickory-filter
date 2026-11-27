@@ -11,7 +11,7 @@ use std::{fmt, net::IpAddr, path::Path, sync::Arc};
 use hickory_server::{
     net::runtime::TokioRuntimeProvider,
     proto::{
-        rr::{LowerName, Name, RData, RecordSet},
+        rr::{LowerName, Name, RData, RecordSet, RecordType},
         serialize::txt::Parser,
     },
     resolver::recursor::{
@@ -19,7 +19,7 @@ use hickory_server::{
         RecursorOptions,
     },
     store::recursor::RecursiveZoneHandler,
-    zone_handler::{Catalog, ZoneType},
+    zone_handler::{Catalog, LookupControlFlow, LookupOptions, ZoneHandler, ZoneType},
 };
 
 use crate::config::{Config, Dnssec, QnameMinimization, Recursion};
@@ -97,24 +97,53 @@ fn recursive_config(recursion: &Recursion, cache_size: u64) -> RecursiveConfig {
     }
 }
 
-/// The catalog that resolves every query from the root servers.
-pub async fn build_catalog(config: &Config) -> Result<Catalog, RecursionError> {
+/// Asks the recursive handler for the root's name servers, which only
+/// succeeds when a root server can be reached (and, with validation on, when
+/// its answer validates). The library contacts the roots lazily, at the first
+/// query, so this is how startup finds out whether recursion can work at all.
+pub struct Primer {
+    handler: Arc<RecursiveZoneHandler<TokioRuntimeProvider>>,
+}
+
+impl Primer {
+    /// One attempt; the error says why it failed.
+    pub async fn prime(&self) -> Result<(), String> {
+        let root = LowerName::new(&Name::root());
+        match self
+            .handler
+            .lookup(&root, RecordType::NS, None, LookupOptions::default())
+            .await
+        {
+            LookupControlFlow::Continue(Ok(_)) | LookupControlFlow::Break(Ok(_)) => Ok(()),
+            LookupControlFlow::Continue(Err(e)) | LookupControlFlow::Break(Err(e)) => {
+                Err(e.to_string())
+            }
+            LookupControlFlow::Skip => Err("the lookup was skipped".to_owned()),
+        }
+    }
+}
+
+/// The catalog that resolves every query from the root servers, and the
+/// `Primer` that checks the roots can be reached.
+pub async fn build_catalog(config: &Config) -> Result<(Catalog, Primer), RecursionError> {
     let recursion = config.recursion();
     // Checked here so the error names the file and says what is wrong with it.
     read_root_hints(&recursion.roots)?;
-    let handler = RecursiveZoneHandler::try_from_config(
-        Name::root(),
-        ZoneType::External,
-        recursive_config(&recursion, config.cache_size),
-        None,
-        TokioRuntimeProvider::default(),
-    )
-    .await
-    .map_err(RecursionError)?;
+    let handler = Arc::new(
+        RecursiveZoneHandler::try_from_config(
+            Name::root(),
+            ZoneType::External,
+            recursive_config(&recursion, config.cache_size),
+            None,
+            TokioRuntimeProvider::default(),
+        )
+        .await
+        .map_err(RecursionError)?,
+    );
 
     let mut catalog = Catalog::new();
-    catalog.upsert(LowerName::new(&Name::root()), vec![Arc::new(handler)]);
-    Ok(catalog)
+    catalog.upsert(LowerName::new(&Name::root()), vec![handler.clone()]);
+    Ok((catalog, Primer { handler }))
 }
 
 #[cfg(test)]

@@ -331,6 +331,8 @@ cosign verify-attestation \
 
 # build provenance of the image and of the chart
 gh attestation verify "oci://$IMAGE" --repo backend-bunny/hickory-filter
+gh attestation verify "oci://ghcr.io/backend-bunny/charts/hickory-filter@sha256:<chart digest>" \
+  --repo backend-bunny/hickory-filter
 cosign verify ghcr.io/backend-bunny/charts/hickory-filter@sha256:<chart digest> \
   --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER"
 ```

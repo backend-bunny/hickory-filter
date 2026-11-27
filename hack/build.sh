@@ -79,5 +79,9 @@ if [ -n "${PUBLISH_TAGS:-}" ]; then
   echo "published $digest"
 fi
 
+# The SBOM to attest: the image's packages plus the Rust crates of the binary.
+python3 "$ROOT/hack/sbom.py" --sbom "$ROOT/out/sbom-$ARCH.spdx.json" --notices "$ROOT/out/notices.json" \
+  --output "$ROOT/out/sbom.spdx.json"
+
 if [ -n "${KEEP_PUBLIC_KEY:-}" ]; then cp "$work/melange.rsa.pub" "$KEEP_PUBLIC_KEY"; fi
 # The private key lives only in $work, which the trap removes.

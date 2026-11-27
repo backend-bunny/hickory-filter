@@ -12,49 +12,31 @@ tasks:
 
   check:
     desc: cargo fmt --check, clippy -D warnings, cargo test
-    preconditions:
-      - sh: test -f Cargo.toml
-        msg: "no Cargo.toml yet (add-filtering-dns-forwarder 1.1)"
     cmds:
       - hack/cargo-check.sh
 
   build:
     desc: Build the APK and the image into out/ (melange + apko)
-    preconditions:
-      - sh: test -x hack/build.sh
-        msg: "hack/build.sh not written yet (add-release-packaging 2.2)"
     cmds:
       - hack/build.sh
 
   test:
     desc: Smoke-test the built image
-    preconditions:
-      - sh: test -x hack/test.sh
-        msg: "hack/test.sh not written yet (add-release-packaging 3.3)"
     cmds:
       - hack/test.sh
 
   lock:
     desc: Regenerate apko.lock.json (Wolfi packages only)
-    preconditions:
-      - sh: test -x hack/lock.sh
-        msg: "hack/lock.sh not written yet (add-release-packaging 3.1)"
     cmds:
       - hack/lock.sh
 
   chart:test:
     desc: Lint the chart and validate its rendered manifests
-    preconditions:
-      - sh: test -x hack/chart-test.sh
-        msg: "hack/chart-test.sh not written yet (add-release-packaging 5.1)"
     cmds:
       - hack/chart-test.sh
 
   publish:dry-run:
     desc: Print the image tags and package the chart without pushing
-    preconditions:
-      - sh: test -x hack/publish.sh && test -x hack/chart-publish.sh
-        msg: "publish scripts not written yet (add-release-packaging 5.4, 6.2)"
     env:
       DRY_RUN: "1"
     cmds:

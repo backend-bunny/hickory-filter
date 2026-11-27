@@ -9,11 +9,12 @@ planned architecture.
 
 The DNS server and the Grafana dashboard are implemented and their specs are
 in `openspec/specs/` (`dns-forwarding`, `filter-rules`, `blocklist-sources`,
-`blocked-responses`, `observability`, `grafana-dashboard`). The image, the Helm
-chart and the release pipeline are built and tested in CI; what remains of the
-`add-release-packaging` change in `openspec/changes/` is verifying a first
-release. Work happens through OpenSpec: implement agreed changes, and don't
-expand scope without the user. Use the `openspec-*` skills
+`blocked-responses`, `observability`, `grafana-dashboard`, `container-image`,
+`helm-chart`, `license-notices`, `release-supply-chain`). The image, the Helm
+chart and the release pipeline are built, tested in CI and released (v0.1.0 and
+v0.1.1 are verified); no change is pending in `openspec/changes/`. Work happens
+through OpenSpec: implement agreed changes, and don't expand scope without the
+user. Use the `openspec-*` skills
 (`.claude/skills/` → `.agents/skills/`): propose, explore, update, apply,
 archive.
 
@@ -55,7 +56,7 @@ archive.
   merging the release-please `chore: release X.Y.Z` PR. Never bump versions
   or push release tags by hand. The release builds and publishes the image
   and the Helm chart (OCI) to `ghcr.io/backend-bunny`. See the
-  `add-release-packaging` change for details.
+  `container-image` and `release-supply-chain` specs for details.
 - **Conventional Commits.** PR titles and commit subjects are
   `type(scope)!: subject`; CI enforces it because they set the version.
 - **Never push to `main` directly.** Branch, PR, `ci-ok` green. Agents may

@@ -1,0 +1,6 @@
+service:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  loadBalancerClass: example.com/internal-lb
+  loadBalancerSourceRanges: [198.51.100.0/24, "2001:db8::/32"]
+  loadBalancerIP: 198.51.100.10

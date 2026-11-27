@@ -1,0 +1,2 @@
+# expect: service.loadBalancerClass needs service.type LoadBalancer
+service: {type: NodePort, loadBalancerClass: example.com/lb}

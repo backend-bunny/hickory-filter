@@ -2,7 +2,15 @@
 replicaCount: 2
 podLabels: {team: dns}
 podAnnotations: {example.com/note: "x"}
-service: {annotations: {example.com/svc: "y"}}
+service:
+  annotations: {example.com/svc: "y"}
+  clusterIP: 10.96.0.53
+  ipFamilyPolicy: PreferDualStack
+  ipFamilies: [IPv4, IPv6]
+  trafficDistribution: PreferClose
+  internalTrafficPolicy: Local
+  sessionAffinity: ClientIP
+  sessionAffinityTimeoutSeconds: 600
 cache: {enabled: true, sizeLimit: 64Mi}
 podDisruptionBudget: {enabled: true}
 networkPolicy: {enabled: true}

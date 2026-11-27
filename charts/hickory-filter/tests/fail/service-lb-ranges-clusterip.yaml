@@ -1,0 +1,2 @@
+# expect: service.loadBalancerSourceRanges needs service.type LoadBalancer
+service: {loadBalancerSourceRanges: [198.51.100.0/24]}

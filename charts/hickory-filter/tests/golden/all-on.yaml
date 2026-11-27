@@ -1128,6 +1128,17 @@ metadata:
     example.com/svc: "y"
 spec:
   type: ClusterIP
+  clusterIP: "10.96.0.53"
+  ipFamilyPolicy: PreferDualStack
+  ipFamilies:
+    - IPv4
+    - IPv6
+  trafficDistribution: PreferClose
+  internalTrafficPolicy: Local
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 600
   selector:
     app.kubernetes.io/name: hickory-filter
     app.kubernetes.io/instance: rel

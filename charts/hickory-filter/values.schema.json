@@ -92,7 +92,18 @@
       "properties": {
         "type": {"enum": ["ClusterIP", "NodePort", "LoadBalancer"]},
         "port": {"type": "integer", "minimum": 1, "maximum": 65535},
-        "annotations": {"type": "object", "additionalProperties": {"type": "string"}}
+        "annotations": {"type": "object", "additionalProperties": {"type": "string"}},
+        "clusterIP": {"type": "string", "minLength": 1},
+        "ipFamilyPolicy": {"enum": ["SingleStack", "PreferDualStack", "RequireDualStack"]},
+        "ipFamilies": {"type": "array", "maxItems": 2, "uniqueItems": true, "items": {"enum": ["IPv4", "IPv6"]}},
+        "trafficDistribution": {"enum": ["PreferClose", "PreferSameZone", "PreferSameNode"]},
+        "externalTrafficPolicy": {"enum": ["Cluster", "Local"]},
+        "internalTrafficPolicy": {"enum": ["Cluster", "Local"]},
+        "loadBalancerClass": {"type": "string", "minLength": 1},
+        "loadBalancerSourceRanges": {"type": "array", "items": {"type": "string", "pattern": "^[0-9a-fA-F:.]+/[0-9]{1,3}$"}},
+        "loadBalancerIP": {"type": "string", "minLength": 1},
+        "sessionAffinity": {"enum": ["None", "ClientIP"]},
+        "sessionAffinityTimeoutSeconds": {"type": "integer", "minimum": 1, "maximum": 86400}
       }
     },
     "resources": {"type": "object"},

@@ -1,4 +1,20 @@
 {{- $port := include "hickory-filter.httpPort" . }}
+{{- $svc := .Values.service }}
+{{- /* The combinations the API server would reject, caught when the chart renders. */ -}}
+{{- if and $svc.externalTrafficPolicy (not (has $svc.type (list "NodePort" "LoadBalancer"))) }}
+{{- fail (printf "service.externalTrafficPolicy needs service.type NodePort or LoadBalancer, but service.type is %s" $svc.type) }}
+{{- end }}
+{{- range $name := list "loadBalancerClass" "loadBalancerSourceRanges" "loadBalancerIP" }}
+{{- if and (get $svc $name) (ne $svc.type "LoadBalancer") }}
+{{- fail (printf "service.%s needs service.type LoadBalancer, but service.type is %s" $name $svc.type) }}
+{{- end }}
+{{- end }}
+{{- if and (eq (len (default (list) $svc.ipFamilies)) 2) (or (not $svc.ipFamilyPolicy) (eq $svc.ipFamilyPolicy "SingleStack")) }}
+{{- fail (printf "service.ipFamilies has two families, which service.ipFamilyPolicy %s doesn't allow: set it to PreferDualStack or RequireDualStack" (default "(unset, so SingleStack)" $svc.ipFamilyPolicy)) }}
+{{- end }}
+{{- if and $svc.sessionAffinityTimeoutSeconds (ne (default "" $svc.sessionAffinity) "ClientIP") }}
+{{- fail "service.sessionAffinityTimeoutSeconds needs service.sessionAffinity ClientIP" }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -11,6 +27,43 @@ metadata:
   {{- end }}
 spec:
   type: {{ .Values.service.type }}
+  {{- with $svc.clusterIP }}
+  clusterIP: {{ . | quote }}
+  {{- end }}
+  {{- with $svc.ipFamilyPolicy }}
+  ipFamilyPolicy: {{ . }}
+  {{- end }}
+  {{- with $svc.ipFamilies }}
+  ipFamilies:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $svc.trafficDistribution }}
+  trafficDistribution: {{ . }}
+  {{- end }}
+  {{- with $svc.externalTrafficPolicy }}
+  externalTrafficPolicy: {{ . }}
+  {{- end }}
+  {{- with $svc.internalTrafficPolicy }}
+  internalTrafficPolicy: {{ . }}
+  {{- end }}
+  {{- with $svc.loadBalancerClass }}
+  loadBalancerClass: {{ . | quote }}
+  {{- end }}
+  {{- with $svc.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $svc.loadBalancerIP }}
+  loadBalancerIP: {{ . | quote }}
+  {{- end }}
+  {{- with $svc.sessionAffinity }}
+  sessionAffinity: {{ . }}
+  {{- end }}
+  {{- if $svc.sessionAffinityTimeoutSeconds }}
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: {{ $svc.sessionAffinityTimeoutSeconds }}
+  {{- end }}
   selector:
     {{- include "hickory-filter.selectorLabels" . | nindent 4 }}
   ports:

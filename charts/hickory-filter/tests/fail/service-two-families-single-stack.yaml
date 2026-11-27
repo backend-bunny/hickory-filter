@@ -1,0 +1,2 @@
+# expect: service.ipFamilies has two families
+service: {ipFamilyPolicy: SingleStack, ipFamilies: [IPv4, IPv6]}

@@ -1,0 +1,2 @@
+# expect: loadBalancerSourceRanges
+service: {type: LoadBalancer, loadBalancerSourceRanges: [not-a-cidr]}

@@ -1,0 +1,2 @@
+# expect: service.ipFamilies has two families
+service: {ipFamilies: [IPv4, IPv6]}

@@ -7,14 +7,14 @@ planned architecture.
 
 ## Status
 
-The DNS server and the Grafana dashboard are implemented and their specs are
-in `openspec/specs/` (`dns-forwarding`, `filter-rules`, `blocklist-sources`,
-`blocked-responses`, `observability`, `grafana-dashboard`, `container-image`,
-`helm-chart`, `license-notices`, `release-supply-chain`). The image, the Helm
-chart and the release pipeline are built, tested in CI and released (v0.1.0 and
-v0.1.1 are verified); no change is pending in `openspec/changes/`. Work happens
-through OpenSpec: implement agreed changes, and don't expand scope without the
-user. Use the `openspec-*` skills
+The DNS server (forwarding and recursive modes) and the Grafana dashboard are
+implemented and their specs are in `openspec/specs/` (`dns-forwarding`,
+`recursive-resolution`, `filter-rules`, `blocklist-sources`, `blocked-responses`,
+`observability`, `grafana-dashboard`, `container-image`, `helm-chart`,
+`license-notices`, `release-supply-chain`). The image, the Helm chart and the
+release pipeline are built, tested in CI and released; no change is pending in
+`openspec/changes/`. Work happens through OpenSpec: implement agreed changes,
+and don't expand scope without the user. Use the `openspec-*` skills
 (`.claude/skills/` → `.agents/skills/`): propose, explore, update, apply,
 archive.
 

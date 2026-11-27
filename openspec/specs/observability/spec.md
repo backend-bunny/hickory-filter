@@ -21,7 +21,7 @@ The server SHALL serve metrics, health and readiness over HTTP on one configurab
 - **THEN** it returns 200
 
 ### Requirement: Readiness
-`/ready` SHALL return 503 until the initial list load has finished and the listeners are bound, and 200 after that. Later refresh failures SHALL NOT make it return 503.
+`/ready` SHALL return 503 until the initial list load has finished and the listeners are bound, and 200 after that. In recursive mode it SHALL also return 503 until a query to the root servers has succeeded since startup, so a server that can't reach them never reports ready. Later refresh failures and later resolution failures SHALL NOT make it return 503.
 
 #### Scenario: Not ready during initial load
 - **GIVEN** the server is still fetching its lists at startup
@@ -31,6 +31,15 @@ The server SHALL serve metrics, health and readiness over HTTP on one configurab
 #### Scenario: Ready after load
 - **WHEN** the initial load has finished
 - **THEN** `/ready` returns 200
+
+#### Scenario: Roots unreachable in recursive mode
+- **GIVEN** recursive mode, finished lists and root servers that don't answer
+- **WHEN** a probe requests `/ready`
+- **THEN** it returns 503
+
+#### Scenario: Roots answer
+- **WHEN** a root server answers the server's first query
+- **THEN** `/ready` returns 200, and stays 200 if a later resolution fails
 
 ### Requirement: Query metrics
 `/metrics` SHALL expose, in Prometheus text format under documented names, counters of queries by outcome (`allowed` by an allow rule, `blocked`, `passed` with no match, `upstream_error`) and by query type, and the time taken to answer by outcome. The query-type label SHALL come from a fixed set of common record types, with every other type counted as `other`, so the number of series stays bounded whatever clients send. Metrics SHALL NOT carry client addresses or queried names.
@@ -52,7 +61,7 @@ The server SHALL serve metrics, health and readiness over HTTP on one configurab
 - **THEN** no metric carries a client address or a queried name
 
 ### Requirement: Upstream and cache metrics
-`/metrics` SHALL expose the number of queries sent to the upstreams, by transport protocol, how many of their responses succeeded and how many timed out or failed, and the response cache's hits and misses, so that upstream health and the cache's effectiveness are visible.
+`/metrics` SHALL expose the number of queries sent to the upstreams, by transport protocol, how many of their responses succeeded and how many timed out or failed, and the response cache's hits and misses, so that upstream health and the cache's effectiveness are visible. In recursive mode the upstreams are the name servers contacted, and the transport protocol label SHALL distinguish encrypted (`tls`) from plain (`udp`, `tcp`) queries, so the share of encrypted traffic is visible.
 
 #### Scenario: Cache hit
 - **GIVEN** a name was answered by an upstream and cached
@@ -63,6 +72,11 @@ The server SHALL serve metrics, health and readiness over HTTP on one configurab
 - **GIVEN** an upstream that does not answer
 - **WHEN** a client queries a name that isn't blocked
 - **THEN** the count of timed-out or failed upstream responses increases
+
+#### Scenario: Encrypted share in recursive mode
+- **GIVEN** recursive mode and a name server that accepts TLS
+- **WHEN** clients query names it serves
+- **THEN** the query count for the `tls` transport increases and the `udp` count for that server does not
 
 ### Requirement: Rule set metrics
 `/metrics` SHALL expose the number of rules in the live rule set by action and kind (domain, wildcard, regex), how many times the rule set has been replaced, and the time of the last replacement.

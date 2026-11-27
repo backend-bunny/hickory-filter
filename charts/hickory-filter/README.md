@@ -48,6 +48,17 @@ through a checksum annotation. `existingConfigMap` uses a ConfigMap you manage i
 | `service.type` | `ClusterIP` | Service type |
 | `service.port` | `53` | DNS port of the Service |
 | `service.annotations` | `{}` | Service annotations |
+| `service.clusterIP` | unset | Pin the Service's cluster IP; `None` makes it headless |
+| `service.ipFamilyPolicy` | unset | `SingleStack`, `PreferDualStack` or `RequireDualStack` |
+| `service.ipFamilies` | unset | `IPv4` and `IPv6`, at most two, in order; two need a dual-stack policy |
+| `service.trafficDistribution` | unset | `PreferClose`, `PreferSameZone` or `PreferSameNode` |
+| `service.externalTrafficPolicy` | unset | `Cluster` or `Local`; only for `NodePort` and `LoadBalancer` |
+| `service.internalTrafficPolicy` | unset | `Cluster` or `Local` |
+| `service.loadBalancerClass` | unset | Which load balancer implementation to use; `LoadBalancer` only |
+| `service.loadBalancerSourceRanges` | unset | CIDRs allowed to reach the load balancer; `LoadBalancer` only |
+| `service.loadBalancerIP` | unset | Requested load balancer address; `LoadBalancer` only, deprecated upstream |
+| `service.sessionAffinity` | unset | `None` or `ClientIP` |
+| `service.sessionAffinityTimeoutSeconds` | unset | Client-IP affinity timeout (1 to 86400); needs `sessionAffinity: ClientIP` |
 | `podLabels` | `{}` | Extra pod labels |
 | `podAnnotations` | `{}` | Extra pod annotations; they win over generated ones |
 | `podDisruptionBudget.enabled` | `false` | Render a PodDisruptionBudget |
@@ -63,6 +74,46 @@ through a checksum annotation. `existingConfigMap` uses a ConfigMap you manage i
 The monitors share `interval`, `scrapeTimeout`, `labels`, `relabelings` and
 `metricRelabelings`. Enabling a monitor or the scrape annotations while `config.http`
 is `false` fails the render.
+
+## Service options
+
+Every Service field above is left out of the Service unless you set it, so the defaults
+render exactly what older versions of the chart did. A combination the API server would
+reject fails when the chart renders, with a message that names the values (for example
+`externalTrafficPolicy` on a `ClusterIP` Service, a load balancer option on another type,
+two IP families without a dual-stack policy).
+
+Dual-stack (the server already listens on IPv4 and IPv6; the cluster needs dual-stack pod
+networking):
+
+```yaml
+service:
+  ipFamilyPolicy: PreferDualStack
+  ipFamilies: [IPv4, IPv6]
+```
+
+Keep client addresses behind a load balancer. With the default external traffic policy every
+client looks like a node address, which makes the query log's `client` field and the
+dashboard's busiest-clients panels useless; `Local` keeps the real source address, at the
+price of sending traffic only to nodes that have a pod:
+
+```yaml
+service:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  loadBalancerSourceRanges: [198.51.100.0/24]
+```
+
+Things to know:
+
+- `clusterIP` and the primary IP family cannot be changed on an existing Service, so changing
+  them in an upgrade fails in the cluster, not in the chart.
+- `trafficDistribution` only matters with more than one replica, needs a Kubernetes version that
+  has the field (it is recent, and `PreferSameZone` and `PreferSameNode` arrived after
+  `PreferClose`), and the zone-aware values need nodes labelled with their zone. The cluster, not
+  the chart, rejects a field it doesn't know.
+- `loadBalancerIP` is deprecated upstream and some clusters ignore it; prefer
+  `loadBalancerClass` or your provider's annotations (`service.annotations`).
 
 ## Recursive mode
 

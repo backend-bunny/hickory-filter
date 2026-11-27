@@ -51,7 +51,7 @@ The values schema SHALL reject a Service option value outside the allowed ones l
 - **THEN** rendering fails because the value isn't one of the allowed ones
 
 ### Requirement: Service option combinations are checked
-Rendering SHALL fail, with a message that names the values, when `service.externalTrafficPolicy` is set and `service.type` is neither `NodePort` nor `LoadBalancer`; when a load balancer option is set and `service.type` is not `LoadBalancer`; when two `service.ipFamilies` are given with the policy `SingleStack`; and when `service.sessionAffinityTimeoutSeconds` is set without `service.sessionAffinity` being `ClientIP`.
+Rendering SHALL fail, with a message that names the values, when `service.externalTrafficPolicy` is set and `service.type` is neither `NodePort` nor `LoadBalancer`; when a load balancer option is set and `service.type` is not `LoadBalancer`; when two `service.ipFamilies` are given and the policy is `SingleStack` or unset (an unset policy is single-stack); and when `service.sessionAffinityTimeoutSeconds` is set without `service.sessionAffinity` being `ClientIP`.
 
 #### Scenario: External traffic policy on a cluster-internal Service
 - **WHEN** `service.externalTrafficPolicy` is `Local` and `service.type` is `ClusterIP`
@@ -63,6 +63,10 @@ Rendering SHALL fail, with a message that names the values, when `service.extern
 
 #### Scenario: Two IP families with a single-stack policy
 - **WHEN** `service.ipFamilies` has two entries and `service.ipFamilyPolicy` is `SingleStack`
+- **THEN** rendering fails with a message that names both values
+
+#### Scenario: Two IP families with no policy
+- **WHEN** `service.ipFamilies` has two entries and `service.ipFamilyPolicy` is unset
 - **THEN** rendering fails with a message that names both values
 
 #### Scenario: Timeout without client-IP affinity

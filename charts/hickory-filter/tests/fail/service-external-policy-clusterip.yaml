@@ -1,0 +1,2 @@
+# expect: service.externalTrafficPolicy needs service.type NodePort or LoadBalancer
+service: {externalTrafficPolicy: Local}

@@ -61,6 +61,18 @@ service:
   type: ClusterIP
   port: 53
   annotations: {}
+  # Optional Service fields: each is left out of the Service unless you set it.
+  # clusterIP: 10.96.0.53              # pin the address ("None" makes it headless)
+  # ipFamilyPolicy: PreferDualStack    # SingleStack, PreferDualStack or RequireDualStack
+  # ipFamilies: [IPv4, IPv6]           # at most two, in order; needs a dual-stack policy
+  # trafficDistribution: PreferClose   # PreferClose, PreferSameZone or PreferSameNode
+  # externalTrafficPolicy: Local       # Cluster or Local; NodePort and LoadBalancer only
+  # internalTrafficPolicy: Local       # Cluster or Local
+  # loadBalancerClass: example.com/lb  # LoadBalancer only
+  # loadBalancerSourceRanges: [192.0.2.0/24]  # LoadBalancer only
+  # loadBalancerIP: 192.0.2.10         # LoadBalancer only; deprecated upstream
+  # sessionAffinity: ClientIP          # None or ClientIP
+  # sessionAffinityTimeoutSeconds: 600 # needs sessionAffinity ClientIP
 
 resources: {}
 nodeSelector: {}

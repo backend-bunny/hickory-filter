@@ -1,0 +1,2 @@
+# expect: service.sessionAffinityTimeoutSeconds needs service.sessionAffinity ClientIP
+service: {sessionAffinityTimeoutSeconds: 600}

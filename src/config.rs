@@ -63,11 +63,20 @@ pub struct Config {
     /// DNS listen addresses (UDP and TCP). Default: port 1053 on all addresses.
     #[serde(default = "default_listen")]
     pub listen: Vec<SocketAddr>,
-    /// Upstream resolvers; at least one is required.
+    /// How queries that aren't blocked are answered: forwarded to `upstreams`
+    /// (the default) or resolved from the root servers.
+    #[serde(default)]
+    pub mode: Mode,
+    /// Upstream resolvers; at least one is required in forward mode and none
+    /// may be given in recursive mode.
     #[serde(default)]
     pub upstreams: Vec<Resolver>,
-    /// The most forwarded answers kept in the response cache; `0` disables it.
-    /// Default 4096.
+    /// Settings of recursive mode. Only allowed when `mode = "recursive"`;
+    /// absent there, the defaults apply (see [`Config::recursion`]).
+    #[serde(default)]
+    pub recursion: Option<Recursion>,
+    /// The most answers kept in the response cache; `0` disables it in
+    /// forward mode. Default 4096.
     #[serde(default = "default_cache_size")]
     pub cache_size: u64,
     #[serde(default)]
@@ -111,6 +120,12 @@ impl Config {
             .collect()
     }
 
+    /// The recursive-mode settings: the `[recursion]` table, or its defaults
+    /// when it is absent.
+    pub fn recursion(&self) -> Recursion {
+        self.recursion.clone().unwrap_or_default()
+    }
+
     fn validate(&self, file: &Path) -> Result<(), ConfigError> {
         let invalid = |key: &'static str, reason: &str| ConfigError::Invalid {
             file: file.to_owned(),
@@ -120,11 +135,53 @@ impl Config {
         if self.listen.is_empty() {
             return Err(invalid("listen", "at least one listen address is required"));
         }
-        if self.upstreams.is_empty() {
-            return Err(invalid(
-                "upstreams",
-                "at least one upstream resolver is required",
-            ));
+        match self.mode {
+            Mode::Forward => {
+                if self.upstreams.is_empty() {
+                    return Err(invalid(
+                        "upstreams",
+                        "at least one upstream resolver is required",
+                    ));
+                }
+                if self.recursion.is_some() {
+                    return Err(invalid(
+                        "recursion",
+                        "only applies to `mode = \"recursive\"`",
+                    ));
+                }
+            }
+            Mode::Recursive => {
+                if !self.upstreams.is_empty() {
+                    return Err(invalid(
+                        "upstreams",
+                        "recursive mode resolves from the root servers and takes no upstreams",
+                    ));
+                }
+                let recursion = self.recursion();
+                if recursion.roots.as_os_str().is_empty() {
+                    return Err(invalid("recursion.roots", "must not be empty"));
+                }
+                if let Dnssec::Anchor(path) = &recursion.dnssec
+                    && path.as_os_str().is_empty()
+                {
+                    return Err(invalid(
+                        "recursion.dnssec",
+                        "a trust anchor path must not be empty",
+                    ));
+                }
+                if recursion.state_save_interval.is_disabled() {
+                    return Err(invalid(
+                        "recursion.state_save_interval",
+                        "must be greater than zero",
+                    ));
+                }
+                if recursion.state_file.is_some() && !recursion.opportunistic_encryption {
+                    return Err(invalid(
+                        "recursion.state_file",
+                        "only applies when `opportunistic_encryption` is on",
+                    ));
+                }
+            }
         }
         let response = &self.filter.response;
         match response.mode {
@@ -363,6 +420,110 @@ impl<'de> Deserialize<'de> for Interval {
         }
         deserializer.deserialize_any(V)
     }
+}
+
+/// How queries that aren't blocked are answered.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    /// Forward them to the configured upstream resolvers.
+    #[default]
+    Forward,
+    /// Resolve them from the root servers, asking no third-party resolver.
+    Recursive,
+}
+
+/// Where recursive mode starts when no `recursion.roots` is given: the root
+/// hints the image ships (outside `/etc/hickory-filter`, which deployments
+/// mount their configuration over).
+pub const DEFAULT_ROOT_HINTS: &str = "/usr/share/hickory-filter/root.hints";
+
+/// Settings of recursive mode.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Recursion {
+    /// File of root server hints the resolution starts from.
+    #[serde(default = "default_roots")]
+    pub roots: PathBuf,
+    /// DNSSEC validation: `"validate"` (the default), `"off"`, or the path of
+    /// a trust anchor file to use instead of the built-in one.
+    #[serde(default)]
+    pub dnssec: Dnssec,
+    /// How much of a query name each name server sees.
+    #[serde(default)]
+    pub qname_minimization: QnameMinimization,
+    /// Probe name servers for DNS-over-TLS and use it where they accept it.
+    /// Unauthenticated: it protects against passive observation only. On by
+    /// default.
+    #[serde(default = "default_true")]
+    pub opportunistic_encryption: bool,
+    /// Where to keep what was learned about TLS support across restarts. The
+    /// only file recursive mode writes; without it nothing is persisted.
+    #[serde(default)]
+    pub state_file: Option<PathBuf>,
+    /// How often that state is saved: what a restart can lose is at most this
+    /// much learning. Default 10 minutes; `0` is not allowed.
+    #[serde(default = "default_state_save_interval")]
+    pub state_save_interval: Interval,
+}
+
+impl Default for Recursion {
+    fn default() -> Self {
+        Self {
+            roots: default_roots(),
+            dnssec: Dnssec::default(),
+            qname_minimization: QnameMinimization::default(),
+            opportunistic_encryption: true,
+            state_file: None,
+            state_save_interval: default_state_save_interval(),
+        }
+    }
+}
+
+fn default_roots() -> PathBuf {
+    PathBuf::from(DEFAULT_ROOT_HINTS)
+}
+
+fn default_state_save_interval() -> Interval {
+    Interval(Duration::from_secs(10 * 60))
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// DNSSEC validation in recursive mode.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum Dnssec {
+    /// Validate with the built-in root trust anchor.
+    #[default]
+    Validate,
+    /// Don't validate.
+    Off,
+    /// Validate with the trust anchors in this file.
+    Anchor(PathBuf),
+}
+
+impl<'de> Deserialize<'de> for Dnssec {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        Ok(match text.as_str() {
+            "validate" => Self::Validate,
+            "off" => Self::Off,
+            other => Self::Anchor(PathBuf::from(other)),
+        })
+    }
+}
+
+/// How much of a query name each name server is sent (RFC 9156).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum QnameMinimization {
+    /// Minimize, and stop at a name error.
+    #[default]
+    Strict,
+    /// Minimize, but keep going after a name error.
+    Relaxed,
 }
 
 /// How verbose the logs are.
@@ -804,5 +965,133 @@ mod tests {
         ));
         assert!(text.contains("bootstrap"), "{text}");
         assert!(text.contains("IP address"), "{text}");
+    }
+
+    // --- mode and recursion ---
+
+    #[test]
+    fn the_mode_defaults_to_forward() {
+        let config = parse(MINIMAL).expect("valid");
+        assert_eq!(config.mode, Mode::Forward);
+        assert!(config.recursion.is_none());
+    }
+
+    #[test]
+    fn recursive_mode_needs_no_upstream_and_uses_the_safe_defaults() {
+        let config = parse("mode = \"recursive\"").expect("valid");
+        assert_eq!(config.mode, Mode::Recursive);
+        let recursion = config.recursion();
+        assert_eq!(recursion, Recursion::default());
+        assert_eq!(recursion.roots, PathBuf::from(DEFAULT_ROOT_HINTS));
+        assert_eq!(recursion.dnssec, Dnssec::Validate);
+        assert_eq!(recursion.qname_minimization, QnameMinimization::Strict);
+        assert!(recursion.opportunistic_encryption);
+        assert!(recursion.state_file.is_none());
+    }
+
+    #[test]
+    fn upstreams_in_recursive_mode_fail_naming_the_key() {
+        let text = error_text("mode = \"recursive\"\nupstreams = [\"192.0.2.53\"]");
+        assert!(text.contains("`upstreams`"), "{text}");
+        assert!(text.contains("test.toml"), "{text}");
+    }
+
+    #[test]
+    fn a_recursion_table_in_forward_mode_fails_naming_the_key() {
+        for mode in ["", "mode = \"forward\"\n"] {
+            let text = error_text(&format!(
+                "{mode}upstreams = [\"192.0.2.53\"]\n[recursion]\n"
+            ));
+            assert!(text.contains("`recursion`"), "{text}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_mode_is_rejected() {
+        let text = error_text("mode = \"iterative\"");
+        assert!(text.contains("iterative"), "{text}");
+    }
+
+    #[test]
+    fn recursion_settings_are_read() {
+        let config = parse(
+            "mode = \"recursive\"\n[recursion]\nroots = \"/tmp/hints\"\ndnssec = \"off\"\n\
+             qname_minimization = \"relaxed\"\n\
+             opportunistic_encryption = true\nstate_file = \"/var/lib/hf/tls.toml\"\n",
+        )
+        .expect("valid");
+        let r = config.recursion();
+        assert_eq!(r.roots, PathBuf::from("/tmp/hints"));
+        assert_eq!(r.dnssec, Dnssec::Off);
+        assert_eq!(r.qname_minimization, QnameMinimization::Relaxed);
+        assert!(r.opportunistic_encryption);
+        assert_eq!(r.state_file, Some(PathBuf::from("/var/lib/hf/tls.toml")));
+    }
+
+    #[test]
+    fn dnssec_accepts_validate_off_or_a_trust_anchor_path() {
+        let dnssec = |value: &str| {
+            parse(&format!(
+                "mode = \"recursive\"\n[recursion]\ndnssec = \"{value}\"\n"
+            ))
+            .expect("valid")
+            .recursion()
+            .dnssec
+        };
+        assert_eq!(dnssec("validate"), Dnssec::Validate);
+        assert_eq!(dnssec("off"), Dnssec::Off);
+        assert_eq!(
+            dnssec("/etc/anchors.key"),
+            Dnssec::Anchor(PathBuf::from("/etc/anchors.key"))
+        );
+        let text = error_text("mode = \"recursive\"\n[recursion]\ndnssec = \"\"\n");
+        assert!(text.contains("recursion.dnssec"), "{text}");
+    }
+
+    #[test]
+    fn an_unknown_key_in_the_recursion_table_is_rejected() {
+        let text =
+            error_text("mode = \"recursive\"\n[recursion]\nqname_minimisation = \"strict\"\n");
+        assert!(text.contains("qname_minimisation"), "{text}");
+    }
+
+    /// The library doesn't apply 0x20 case randomization in its recursor
+    /// (hickory 0.26.4), so there is no such setting; a configuration that
+    /// asks for it is rejected rather than silently ignored.
+    #[test]
+    fn case_randomization_is_not_a_setting() {
+        let text = error_text("mode = \"recursive\"\n[recursion]\ncase_randomization = true\n");
+        assert!(text.contains("case_randomization"), "{text}");
+    }
+
+    #[test]
+    fn a_state_file_needs_opportunistic_encryption() {
+        let text = error_text(
+            "mode = \"recursive\"\n[recursion]\nopportunistic_encryption = false\nstate_file = \"/x\"\n",
+        );
+        assert!(text.contains("recursion.state_file"), "{text}");
+    }
+
+    #[test]
+    fn the_state_save_interval_defaults_to_ten_minutes_and_must_be_positive() {
+        let config = parse("mode = \"recursive\"").expect("valid");
+        assert_eq!(
+            config.recursion().state_save_interval,
+            Interval(Duration::from_secs(600))
+        );
+        let config = parse("mode = \"recursive\"\n[recursion]\nstate_save_interval = \"30s\"\n")
+            .expect("valid");
+        assert_eq!(
+            config.recursion().state_save_interval,
+            Interval(Duration::from_secs(30))
+        );
+        let text = error_text("mode = \"recursive\"\n[recursion]\nstate_save_interval = 0\n");
+        assert!(text.contains("recursion.state_save_interval"), "{text}");
+    }
+
+    #[test]
+    fn an_empty_roots_path_is_rejected() {
+        let text = error_text("mode = \"recursive\"\n[recursion]\nroots = \"\"\n");
+        assert!(text.contains("recursion.roots"), "{text}");
     }
 }

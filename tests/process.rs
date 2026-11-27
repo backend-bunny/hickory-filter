@@ -156,3 +156,27 @@ fn a_config_error_exits_nonzero_before_binding_anything() {
     let (status, _) = process.wait_exit(Duration::from_secs(15));
     assert_eq!(status.code(), Some(1), "{status:?}");
 }
+
+/// A recursive-mode configuration whose root hints file is missing stops
+/// startup, naming the file, before anything is served.
+#[test]
+fn a_missing_root_hints_file_stops_startup_naming_the_file() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let config = dir.path().join("config.toml");
+    std::fs::write(
+        &config,
+        "mode = \"recursive\"\nlisten = [\"127.0.0.1:0\"]\nhttp = false\n\
+         [recursion]\nroots = \"/nonexistent/root.hints\"\n",
+    )
+    .expect("write config");
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_hickory-filter"))
+        .arg("--config")
+        .arg(&config)
+        .output()
+        .expect("run hickory-filter");
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("/nonexistent/root.hints"), "{stderr}");
+    assert!(stderr.contains("recursive mode"), "{stderr}");
+}

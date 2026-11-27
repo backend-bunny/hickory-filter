@@ -64,6 +64,34 @@ The monitors share `interval`, `scrapeTimeout`, `labels`, `relabelings` and
 `metricRelabelings`. Enabling a monitor or the scrape annotations while `config.http`
 is `false` fails the render.
 
+## Recursive mode
+
+By default the server forwards to `config.upstreams`. With `mode: recursive` it resolves
+names itself, from the root servers, so no third-party resolver sees your queries. The chart
+leaves `upstreams` out of the rendered configuration in that mode, so this is enough:
+
+```yaml
+config:
+  mode: recursive
+```
+
+The pods then need to reach arbitrary hosts on UDP and TCP port 53 (and TCP port 853, where
+name servers accept TLS); the chart restricts no egress, and an enabled NetworkPolicy
+selects ingress only. A pod becomes ready once a root server answers, so a network that
+blocks DNS shows up as a pod that never becomes ready. DNSSEC validation, QNAME minimization
+and opportunistic encryption are on by default (see the project README for what each does and
+doesn't give); change them under `config.recursion`. To keep what was learned about TLS
+support across restarts, enable the cache volume and point the state file into it:
+
+```yaml
+cache:
+  enabled: true
+config:
+  mode: recursive
+  recursion:
+    state_file: /var/cache/hickory-filter/tls-state.toml
+```
+
 ## Examples
 
 Scrape through a Prometheus Operator monitor (the labels match the operator's selector):

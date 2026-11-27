@@ -1,0 +1,2 @@
+# expect: mode
+config: {mode: iterative}

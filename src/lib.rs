@@ -11,6 +11,7 @@ pub mod http;
 pub mod lists;
 pub mod logging;
 pub mod metrics;
+pub mod recursion;
 pub mod refresh;
 pub mod rules;
 pub mod ruleset;

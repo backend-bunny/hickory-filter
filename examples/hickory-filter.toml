@@ -12,7 +12,13 @@
 # addresses, so the server runs unprivileged.
 listen = ["0.0.0.0:1053", "[::]:1053"]
 
-# Where queries that are not blocked are forwarded. At least one is required.
+# How queries that are not blocked are answered. "forward" (the default) asks
+# the upstreams below. "recursive" resolves them from the root servers, asks no
+# third-party resolver, and takes no upstreams: see [recursion] at the end.
+mode = "forward"
+
+# Where queries that are not blocked are forwarded. At least one is required in
+# forward mode; recursive mode takes none.
 upstreams = ["tls://192.0.2.53#dns.example", "192.0.2.54"]
 
 # The most forwarded answers kept in the response cache (each for at most its
@@ -71,3 +77,22 @@ ttl = 3600
 rule = "block list hosts https://lists.example/hosts.txt"
 refresh = "6h"      # overrides filter.refresh for this list
 required = false    # true: startup fails if this list cannot be loaded
+
+# Recursive mode: set mode = "recursive", remove `upstreams`, and tune it here
+# if you need to. Every key is optional. Plain DNS goes to the authoritative
+# servers on port 53 (and TLS probes to port 853), so the network must allow it.
+# [recursion]
+# File of root server hints the resolution starts from.
+# roots = "/usr/share/hickory-filter/root.hints"
+# DNSSEC: "validate" (built-in root trust anchor), "off", or the path of a file
+# of trust anchors to use instead.
+# dnssec = "validate"
+# How much of a query name each name server sees: "strict" or "relaxed".
+# qname_minimization = "strict"
+# Use TLS to name servers that accept it. Unauthenticated: it protects against
+# passive observation only, and only for servers that accept TLS.
+# opportunistic_encryption = true
+# Keep what was learned about TLS support across restarts (a writable path).
+# state_file = "/var/lib/hickory-filter/tls.toml"
+# How often that state is saved: a restart loses at most this much learning.
+# state_save_interval = "10m"

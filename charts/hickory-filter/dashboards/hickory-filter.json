@@ -466,7 +466,7 @@
       "id": 9,
       "type": "timeseries",
       "title": "Upstream queries by protocol",
-      "description": "Queries sent to the upstream resolvers.",
+      "description": "Queries sent to the upstream resolvers, or to the name servers contacted in recursive mode. `tls` is encrypted, `udp` and `tcp` are plain.",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds_prometheus}"
@@ -511,7 +511,7 @@
       "id": 10,
       "type": "timeseries",
       "title": "Upstream responses by status",
-      "description": "Success, timeout and failure responses, aggregated over the upstreams.",
+      "description": "Success, timeout and failure responses, aggregated over the upstreams (the name servers in recursive mode).",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds_prometheus}"
@@ -556,7 +556,7 @@
       "id": 11,
       "type": "stat",
       "title": "Cache hit ratio",
-      "description": "Share of forwarded queries answered from the response cache.",
+      "description": "Share of queries answered from the response cache: the forwarder's cache in forward mode, the recursor's in recursive mode.",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds_prometheus}"
@@ -573,7 +573,7 @@
             "type": "prometheus",
             "uid": "${ds_prometheus}"
           },
-          "expr": "sum(increase(hickory_resolver_cache_hit_total{instance=~\"$instance\"}[$__range])) / (sum(increase(hickory_resolver_cache_hit_total{instance=~\"$instance\"}[$__range])) + sum(increase(hickory_resolver_cache_miss_total{instance=~\"$instance\"}[$__range])))",
+          "expr": "((sum(increase(hickory_resolver_cache_hit_total{instance=~\"$instance\"}[$__range])) or vector(0)) + (sum(increase(hickory_recursor_cache_hit_total{instance=~\"$instance\"}[$__range])) or vector(0))) / (((sum(increase(hickory_resolver_cache_hit_total{instance=~\"$instance\"}[$__range])) or vector(0)) + (sum(increase(hickory_recursor_cache_hit_total{instance=~\"$instance\"}[$__range])) or vector(0))) + ((sum(increase(hickory_resolver_cache_miss_total{instance=~\"$instance\"}[$__range])) or vector(0)) + (sum(increase(hickory_recursor_cache_miss_total{instance=~\"$instance\"}[$__range])) or vector(0))))",
           "refId": "A",
           "legendFormat": "",
           "instant": true,

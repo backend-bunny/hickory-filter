@@ -17,7 +17,7 @@ arc-swap = "1.9.5"
 async-trait = "0.1.92"
 fst = "0.4.7"
 hickory-resolver = { version = "=0.26.4", features = ["tokio", "tls-aws-lc-rs", "rustls-platform-verifier", "metrics"] }
-hickory-server = { version = "=0.26.4", features = ["resolver"] }
+hickory-server = { version = "=0.26.4", features = ["resolver", "recursor", "dnssec-aws-lc-rs", "toml"] }
 humantime = "2.4.0"
 regex = "1.13.2"
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
@@ -34,6 +34,11 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 
 [dev-dependencies]
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
+# A name server that speaks DNS-over-TLS with a self-signed certificate, for the
+# opportunistic encryption tests. Dev-only: nothing here reaches the binary.
+hickory-server = { version = "=0.26.4", features = ["tls-aws-lc-rs"] }
+rcgen = { version = "0.14", default-features = false, features = ["aws_lc_rs", "pem"] }
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "std"] }
 serde_json = "1.0.154"
 tempfile = "3.27.0"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "time", "io-util", "test-util"] }

@@ -22,8 +22,9 @@ fn load() -> Value {
 }
 
 fn documented_metrics() -> BTreeSet<String> {
-    readme_table("### Metrics reference")
+    ["### Metrics reference", "#### Recursive mode metrics"]
         .iter()
+        .flat_map(|heading| readme_table(heading))
         .map(|row| backticked(&row[0])[0].clone())
         .collect()
 }
@@ -121,7 +122,7 @@ fn problems(dashboard: &Value, documented: &BTreeSet<String>) -> Vec<String> {
     }
 
     // Sections: the overview needs only Prometheus, the usage section only Loki.
-    let metric = Regex::new(r"hickory_(?:filter|resolver)_[a-z_]+").unwrap();
+    let metric = Regex::new(r"hickory_(?:filter|resolver|recursor)_[a-z_]+").unwrap();
     let label_filter = Regex::new(r"\|\s*([a-z_]+)\s*(?:=~|!~|!=|=)").unwrap();
     let grouping = Regex::new(r"by \(([^)]*)\)").unwrap();
     let mut section = String::new();

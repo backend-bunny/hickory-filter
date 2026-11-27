@@ -41,6 +41,10 @@ pipeline:
       cargo auditable build --locked --release --offline --target "$target"
       install -Dm755 "$CARGO_TARGET_DIR/$target/release/hickory-filter" \
         "${{targets.destdir}}/usr/bin/hickory-filter"
+      # The root server hints recursive mode starts from (outside
+      # /etc/hickory-filter, which deployments mount their configuration over).
+      install -Dm644 data/root.hints \
+        "${{targets.destdir}}/usr/share/hickory-filter/root.hints"
       docdir="${{targets.destdir}}/usr/share/doc/hickory-filter"
       mkdir -p "$docdir"
       for f in LICENSE-MIT LICENSE-APACHE THIRD-PARTY-NOTICES.md; do

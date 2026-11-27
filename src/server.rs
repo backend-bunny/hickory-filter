@@ -26,7 +26,7 @@ use tokio::{
 
 use crate::{
     cache::CachedLoader,
-    config::{Config, Http},
+    config::{Config, Http, Mode},
     fetch::{FetchError, FetchOutcome, Fetcher},
     filter_handler::FilterHandler,
     forwarder::{ForwarderError, build_catalog},
@@ -34,6 +34,7 @@ use crate::{
     lists::{RequiredListError, Source, Validators},
     logging::QueryLog,
     metrics,
+    recursion::{Primer, RecursionError},
     refresh::{DefaultLoader, ListLoader, Refresher},
     rules::RuleError,
     ruleset::{LiveRules, RuleSet},
@@ -75,6 +76,7 @@ pub enum StartError {
     Rules(RuleError),
     Fetcher(FetchError),
     Forwarder(ForwarderError),
+    Recursion(RecursionError),
 }
 
 impl fmt::Display for StartError {
@@ -85,6 +87,7 @@ impl fmt::Display for StartError {
             Self::Rules(e) => e.fmt(f),
             Self::Fetcher(e) => write!(f, "cannot build the list fetcher: {e}"),
             Self::Forwarder(e) => e.fmt(f),
+            Self::Recursion(e) => e.fmt(f),
         }
     }
 }
@@ -112,6 +115,12 @@ impl From<RuleError> for StartError {
 impl From<FetchError> for StartError {
     fn from(e: FetchError) -> Self {
         Self::Fetcher(e)
+    }
+}
+
+impl From<RecursionError> for StartError {
+    fn from(e: RecursionError) -> Self {
+        Self::Recursion(e)
     }
 }
 
@@ -254,6 +263,9 @@ pub struct Running {
     addrs: Vec<SocketAddr>,
     skipped: Vec<(SocketAddr, String)>,
     live: Arc<LiveRules>,
+    /// Recursive mode: the task that waits for the root servers to answer
+    /// before reporting ready.
+    priming: Option<JoinHandle<()>>,
 }
 
 impl Running {
@@ -298,6 +310,9 @@ impl Running {
         })
         .await
         .is_ok();
+        if let Some(priming) = self.priming.take() {
+            priming.abort();
+        }
         if !finished {
             self.refresher.abort();
         }
@@ -354,6 +369,7 @@ async fn serve_dns(
         Vec<SocketAddr>,
         Vec<(SocketAddr, String)>,
         Arc<LiveRules>,
+        Option<Primer>,
     ),
     StartError,
 > {
@@ -363,7 +379,13 @@ async fn serve_dns(
     let mut refresher = Refresher::new(loader, config, Arc::clone(&live))?;
     refresher.initial_load().await?;
 
-    let catalog = build_catalog(config)?;
+    let (catalog, primer) = match config.mode {
+        Mode::Forward => (build_catalog(config)?, None),
+        Mode::Recursive => {
+            let (catalog, primer) = crate::recursion::build_catalog(config).await?;
+            (catalog, Some(primer))
+        }
+    };
     let handler = FilterHandler::new(catalog, Arc::clone(&live), config.filter.response)
         .with_query_log(QueryLog::from_config(&config.log));
     let mut server = Server::new(handler);
@@ -376,7 +398,41 @@ async fn serve_dns(
 
     let token = server.shutdown_token().clone();
     let refresher = tokio::spawn(refresher.run(async move { token.cancelled().await }));
-    Ok((server, refresher, listeners.addrs, listeners.skipped, live))
+    Ok((
+        server,
+        refresher,
+        listeners.addrs,
+        listeners.skipped,
+        live,
+        primer,
+    ))
+}
+
+/// How long to wait before asking the root servers again after a failure, at
+/// first and at most.
+const PRIMING_RETRY_FIRST: Duration = Duration::from_secs(1);
+const PRIMING_RETRY_MAX: Duration = Duration::from_secs(10);
+
+/// Ask the root servers until one answers, then report ready. A later
+/// resolution failure never makes `/ready` fail again.
+fn spawn_priming(primer: Primer, ready: Arc<AtomicBool>) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut delay = PRIMING_RETRY_FIRST;
+        loop {
+            match primer.prime().await {
+                Ok(()) => {
+                    tracing::info!("a root server answered; ready");
+                    ready.store(true, Ordering::Release);
+                    return;
+                }
+                Err(reason) => {
+                    tracing::warn!("waiting for the root servers: {reason}");
+                    tokio::time::sleep(delay).await;
+                    delay = (delay * 2).min(PRIMING_RETRY_MAX);
+                }
+            }
+        }
+    })
 }
 
 /// Start serving: bind, load every list, then answer queries and keep the
@@ -392,8 +448,17 @@ pub async fn start(config: &Config) -> Result<Running, StartError> {
     let http = start_http(config, &ready).await?;
 
     match serve_dns(config, listeners).await {
-        Ok((server, refresher, addrs, skipped, live)) => {
-            ready.store(true, Ordering::Release);
+        Ok((server, refresher, addrs, skipped, live, primer)) => {
+            // Forward mode is ready now. Recursive mode is ready once a root
+            // server has answered; until then queries are still served (and
+            // fail with SERVFAIL if the network is the problem).
+            let priming = match primer {
+                Some(primer) => Some(spawn_priming(primer, Arc::clone(&ready))),
+                None => {
+                    ready.store(true, Ordering::Release);
+                    None
+                }
+            };
             Ok(Running {
                 server,
                 refresher,
@@ -402,6 +467,7 @@ pub async fn start(config: &Config) -> Result<Running, StartError> {
                 addrs,
                 skipped,
                 live,
+                priming,
             })
         }
         Err(error) => {

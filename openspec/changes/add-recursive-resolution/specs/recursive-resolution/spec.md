@@ -28,9 +28,9 @@ The configuration SHALL have a `mode` setting with the values `forward` (the def
 In recursive mode a query that isn't blocked SHALL be resolved by asking the root servers, following delegations down to the authoritative servers, and returning the answer found there. No other resolver SHALL be asked to answer it.
 
 #### Scenario: Resolved through a delegation chain
-- **GIVEN** a root server that delegates `example.test` to a name server that answers `www.example.test`
+- **GIVEN** a root server that delegates `test` to a TLD server, which delegates `example.test` to a name server that answers `www.example.test`
 - **WHEN** a client queries `www.example.test`
-- **THEN** the client receives the name server's answer, and only the root and that name server were contacted
+- **THEN** the client receives the name server's answer, and only those three servers were contacted
 
 ### Requirement: Root server hints
 The root servers the resolution starts from SHALL be read at startup from a root hints file given by `recursion.roots`, defaulting to the file shipped with the image. A file that is missing, unreadable or lists no usable address SHALL fail startup with an error naming the file.
@@ -71,18 +71,13 @@ By default the server SHALL validate DNSSEC for the answers it resolves, using t
 - **WHEN** a client queries a name in a zone whose signatures are invalid
 - **THEN** the client receives the answer
 
-### Requirement: Name minimization and case randomization
-By default each name server SHALL be sent only as much of the query name as it needs to see (QNAME minimization, strict), and the case of query names sent over UDP SHALL be randomized, with responses that don't preserve it rejected. `recursion.qname_minimization` SHALL accept `strict` (the default) and `relaxed`, and `recursion.case_randomization` SHALL accept `true` (the default) and `false`.
+### Requirement: Name minimization
+By default each name server SHALL be sent only as much of the query name as it needs to see (QNAME minimization, strict). `recursion.qname_minimization` SHALL accept `strict` (the default) and `relaxed`.
 
 #### Scenario: Minimized query
 - **GIVEN** a root server and a TLD server observing the queries they receive
 - **WHEN** a client queries `www.example.test`
 - **THEN** the root server doesn't receive the full name and the TLD server receives at most `example.test`
-
-#### Scenario: Case not preserved
-- **GIVEN** a name server that answers in lower case regardless of the query's case
-- **WHEN** a query is sent to it over UDP with randomized case
-- **THEN** its answer over UDP is rejected
 
 ### Requirement: Name server address filtering
 The server SHALL NOT send queries to name servers at loopback, private, link-local, documentation, multicast or otherwise non-routable addresses, even when a delegation names one, so that a delegation can't make the server probe its own network.
@@ -118,7 +113,7 @@ Opportunistic encryption SHALL NOT verify the name server's certificate, and the
 - **THEN** it states that the encryption is unauthenticated, protects against passive observers only, and covers only servers that accept TLS
 
 ### Requirement: Encryption state persistence
-The server SHALL keep what it has learned about which name servers accept TLS in memory, and SHALL persist it across restarts only when `recursion.state_file` names a file. It SHALL NOT write that file or any other file otherwise.
+The server SHALL keep what it has learned about which name servers accept TLS in memory, and SHALL persist it across restarts only when `recursion.state_file` names a file, saving it every `recursion.state_save_interval` (default 10 minutes, and greater than zero). It SHALL NOT write that file or any other file otherwise.
 
 #### Scenario: State file configured
 - **GIVEN** `recursion.state_file` names a writable file and a server accepted TLS

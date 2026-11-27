@@ -86,3 +86,40 @@ fn check_rejects_an_invalid_rule_and_names_it() {
     assert!(stderr.contains("block glob *.example"), "{stderr}");
     assert!(stderr.contains("accepted types"), "{stderr}");
 }
+
+#[test]
+fn check_accepts_recursive_mode_and_rejects_the_mismatches() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let write = |name: &str, text: &str| {
+        let file = dir.path().join(name);
+        std::fs::write(&file, text).expect("write");
+        file
+    };
+
+    let ok = check(&write("recursive.toml", "mode = \"recursive\"\n"));
+    assert!(ok.status.success(), "{ok:?}");
+
+    let ok = check(&write(
+        "recursive-tuned.toml",
+        "mode = \"recursive\"\n[recursion]\ndnssec = \"off\"\nqname_minimization = \"relaxed\"\n",
+    ));
+    assert!(ok.status.success(), "{ok:?}");
+
+    for (name, text, key) in [
+        (
+            "upstreams.toml",
+            "mode = \"recursive\"\nupstreams = [\"192.0.2.53\"]\n",
+            "upstreams",
+        ),
+        (
+            "table.toml",
+            "upstreams = [\"192.0.2.53\"]\n[recursion]\n",
+            "recursion",
+        ),
+    ] {
+        let output = check(&write(name, text));
+        assert_eq!(output.status.code(), Some(1), "{name}: {output:?}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(name) && stderr.contains(key), "{stderr}");
+    }
+}

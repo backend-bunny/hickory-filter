@@ -1,0 +1,5 @@
+config:
+  mode: recursive
+  recursion: {dnssec: validate, qname_minimization: relaxed, opportunistic_encryption: true, state_file: /var/cache/hickory-filter/tls-state.toml}
+cache: {enabled: true}
+networkPolicy: {enabled: true}

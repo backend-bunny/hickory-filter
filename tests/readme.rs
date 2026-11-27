@@ -18,6 +18,11 @@ fn example_keys() -> BTreeSet<String> {
     let mut table = String::new();
     let mut keys = BTreeSet::new();
     for line in text.lines() {
+        // A commented-out table header (`# [recursion]`) still opens its table.
+        let line = line
+            .strip_prefix("# ")
+            .filter(|rest| rest.starts_with('['))
+            .unwrap_or(line);
         if let Some(name) = line.strip_prefix("[[").and_then(|l| l.strip_suffix("]]")) {
             table = format!("{name}[]");
         } else if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
@@ -101,12 +106,37 @@ fn every_documented_key_is_accepted_by_the_config() {
             "filter.lists[].required",
             "[[filter.lists]]\nrule = \"block list domain file:///x\"\nrequired = true",
         ),
+        ("mode", "mode = \"forward\""),
+        (
+            "recursion.roots",
+            "[recursion]\nroots = \"/tmp/root.hints\"",
+        ),
+        ("recursion.dnssec", "[recursion]\ndnssec = \"off\""),
+        (
+            "recursion.qname_minimization",
+            "[recursion]\nqname_minimization = \"relaxed\"",
+        ),
+        (
+            "recursion.opportunistic_encryption",
+            "[recursion]\nopportunistic_encryption = false",
+        ),
+        (
+            "recursion.state_file",
+            "[recursion]\nstate_file = \"/tmp/tls.toml\"",
+        ),
+        (
+            "recursion.state_save_interval",
+            "[recursion]\nstate_save_interval = \"30s\"",
+        ),
     ];
     let documented = documented_keys();
     for (key, snippet) in snippets {
         assert!(documented.contains(key), "{key} is not documented");
         // Top-level keys must come before tables.
-        let text = if snippet.contains('[') {
+        let text = if key.starts_with("recursion.") {
+            // Recursive mode takes no upstreams.
+            format!("mode = \"recursive\"\n{snippet}\n")
+        } else if snippet.contains('[') {
             format!("upstreams = [\"192.0.2.53\"]\n{snippet}\n")
         } else {
             format!("{snippet}\nupstreams = [\"192.0.2.53\"]\n")
@@ -140,7 +170,34 @@ fn the_documented_defaults_are_the_defaults_in_the_code() {
             "listen",
             config.listen.iter().map(ToString::to_string).collect(),
         ),
+        ("mode", vec![lower(format!("{:?}", config.mode))]),
         ("cache_size", vec![config.cache_size.to_string()]),
+        (
+            "recursion.roots",
+            vec![hickory_filter::config::DEFAULT_ROOT_HINTS.to_owned()],
+        ),
+        (
+            "recursion.dnssec",
+            vec![lower(format!("{:?}", config.recursion().dnssec))],
+        ),
+        (
+            "recursion.qname_minimization",
+            vec![lower(format!(
+                "{:?}",
+                config.recursion().qname_minimization
+            ))],
+        ),
+        (
+            "recursion.opportunistic_encryption",
+            vec![config.recursion().opportunistic_encryption.to_string()],
+        ),
+        (
+            "recursion.state_save_interval",
+            vec![format!(
+                "{}m",
+                config.recursion().state_save_interval.0.as_secs() / 60
+            )],
+        ),
         (
             "http",
             vec![match config.http {
@@ -186,6 +243,7 @@ fn the_documented_defaults_are_the_defaults_in_the_code() {
         "filter.bootstrap",
         "filter.cache_dir",
         "filter.rules",
+        "recursion.state_file",
     ] {
         let row = rows
             .iter()
@@ -249,5 +307,43 @@ fn the_quick_start_commands_use_options_that_exist() {
     for option in ["--config", "--check", "--version", "--help"] {
         assert!(readme.contains(option), "the README mentions {option}");
         assert!(help.contains(option), "the binary's help mentions {option}");
+    }
+}
+
+/// The README's section on recursive mode says what its encryption does and
+/// doesn't give, and what isn't supported yet.
+#[test]
+fn the_recursive_mode_section_states_its_limits() {
+    let text = common::readme();
+    let start = text
+        .find("\n## Recursive mode\n")
+        .expect("a section on recursive mode");
+    let rest = &text[start + 1..];
+    let end = rest[3..].find("\n## ").map_or(rest.len(), |i| i + 3);
+    let section = rest[..end].replace('\n', " ").to_lowercase();
+    for (needle, why) in [
+        ("unauthenticated", "the encryption is not authenticated"),
+        ("passive", "it protects against passive observers only"),
+        (
+            "accept tls",
+            "it applies only to name servers that accept TLS",
+        ),
+        ("0x20", "case randomization is not supported yet"),
+        (
+            "once the library supports it",
+            "and is planned for when the library supports it",
+        ),
+        (
+            "as open as in forward mode",
+            "the listener is as open as in forward mode",
+        ),
+        ("udp and tcp port 53", "the egress it needs"),
+        ("port 853", "the egress for TLS probes"),
+        ("trust anchor", "the trust anchor caveat"),
+    ] {
+        assert!(
+            section.contains(needle),
+            "the section on recursive mode lacks {needle:?}: {why}"
+        );
     }
 }

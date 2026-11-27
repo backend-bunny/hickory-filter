@@ -11,7 +11,7 @@ TAR="${IMAGE_TAR:-out/image.tar}"
 version="$(sed -n 's/^  version: \([^ ]*\).*/\1/p' melange.yaml)"
 DNS_PORT="${DNS_PORT:-28053}"; HTTP_PORT="${HTTP_PORT:-28080}"; UP_PORT="${UP_PORT:-28054}"
 work="$(mktemp -d)"; name="hf-smoke-$$"; pids=""
-cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; for p in $pids; do kill "$p" 2>/dev/null || true; done; rm -rf "$work"; }
+cleanup() { docker rm -f "$name" "$name-rec" >/dev/null 2>&1 || true; for p in $pids; do kill "$p" 2>/dev/null || true; done; rm -rf "$work"; }
 trap cleanup EXIT
 fail=0; check() { if [ "$2" = ok ]; then echo "ok   $1"; else echo "FAIL $1 ($2)" >&2; fail=1; fi; }
 
@@ -49,6 +49,10 @@ if [ -f "$ROOT/out/notices.json" ] && [ -f "$work/THIRD-PARTY-NOTICES.md" ]; the
     check "notices list the same crates as notices.json and the binary" ok
   else check "notices list the same crates as notices.json and the binary" differ; fi
 else check "notices.json present" missing; fi
+# the root hints recursive mode starts from
+docker cp "$cid:/usr/share/hickory-filter/root.hints" "$work/root.hints" >/dev/null 2>&1 \
+  && [ "$(grep -c ' A ' "$work/root.hints")" -ge 13 ] && [ "$(grep -c ' AAAA ' "$work/root.hints")" -ge 13 ] \
+  && check "ships the root hints (13 servers, both address families)" ok || check "ships the root hints" missing
 docker rm "$cid" >/dev/null
 if python3 - "$ROOT/out/sbom.spdx.json" "$ROOT/out/notices.json" <<'PY'
 import json, sys
@@ -103,6 +107,24 @@ PY
 [ "$(ask blocked.example)" = 0.0.0.0 ] && check "blocked name is answered with the block response" ok || check "blocked name is answered with the block response" "$(ask blocked.example)"
 [ "$(ask ok.example)" = 192.0.2.1 ] && check "unblocked name is forwarded to the upstream" ok || check "unblocked name is forwarded to the upstream" "$(ask ok.example)"
 [ "$(docker inspect "$name" --format '{{.State.Running}}')" = true ] && check "still running" ok || check "still running" "$(docker logs "$name" 2>&1 | tail -3)"
+
+# recursive mode starts in the same restricted container with the shipped hints.
+# It needs no network to be healthy; it is ready once a root server answers.
+REC_DNS_PORT="${REC_DNS_PORT:-28153}"; REC_HTTP_PORT="${REC_HTTP_PORT:-28180}"
+cat > "$work/recursive.toml" <<CFG
+mode = "recursive"
+listen = ["127.0.0.1:$REC_DNS_PORT"]
+http = "127.0.0.1:$REC_HTTP_PORT"
+CFG
+chmod 644 "$work/recursive.toml"
+docker run -d --name "$name-rec" --network host --read-only --cap-drop ALL --security-opt no-new-privileges \
+  -v "$work/recursive.toml:/etc/hickory-filter/config.toml:ro" "$ref" >/dev/null
+for _ in $(seq 1 50); do curl -sf "http://127.0.0.1:$REC_HTTP_PORT/health" >/dev/null && break; sleep 0.2; done
+[ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$REC_HTTP_PORT/health")" = 200 ] \
+  && check "recursive mode starts in the restricted container (/health is 200)" ok \
+  || check "recursive mode starts in the restricted container" "$(docker logs "$name-rec" 2>&1 | tail -3)"
+[ "$(docker inspect "$name-rec" --format '{{.State.Running}}')" = true ] \
+  && check "recursive mode is still running" ok || check "recursive mode is still running" "$(docker logs "$name-rec" 2>&1 | tail -3)"
 
 [ $fail = 0 ] && echo "image smoke test passed"
 exit $fail

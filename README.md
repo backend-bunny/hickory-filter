@@ -123,15 +123,16 @@ with every key, and the end-to-end tests run the binary from it.
 
 ### Configuration reference
 
-Keys of the `[filter]`, `[filter.response]`, `[log]` and `[[filter.lists]]`
-tables are written with their table: `filter.refresh` is `refresh` in
+Keys of the `[filter]`, `[filter.response]`, `[log]`, `[recursion]` and
+`[[filter.lists]]` tables are written with their table: `filter.refresh` is `refresh` in
 `[filter]`.
 
 | Key | Default | Meaning |
 |---|---|---|
 | `listen` | `0.0.0.0:1053`, `[::]:1053` | DNS listen addresses, each answering UDP and TCP. An IPv6 address on a host without IPv6 is skipped with a note |
-| `upstreams` | required | Resolvers for names that aren't blocked, as IP addresses (forms below). At least one |
-| `cache_size` | `4096` | Most forwarded answers kept in the response cache, each for at most its TTL. `0` disables it |
+| `mode` | `forward` | `forward` asks the `upstreams`; `recursive` resolves from the root servers and takes none (see `recursion.*`) |
+| `upstreams` | required | Resolvers for names that aren't blocked, as IP addresses (forms below). At least one in forward mode, none in recursive mode |
+| `cache_size` | `4096` | Most answers kept in the response cache, each for at most its TTL. `0` disables it in forward mode |
 | `http` | `0.0.0.0:8080` | Address of the health, readiness and metrics endpoint, or `false` for none |
 | `log.level` | `info` | `error`, `warn`, `info`, `debug` or `trace` |
 | `log.format` | `text` | `text` or `json` (one object per line) |
@@ -148,6 +149,12 @@ tables are written with their table: `filter.refresh` is `refresh` in
 | `filter.lists[].rule` | required | A list declaration, `<allow\|block> list <domain\|hosts\|wildcard\|regex> <url>` |
 | `filter.lists[].refresh` | `filter.refresh` | This list's refresh interval; `0` never |
 | `filter.lists[].required` | `false` | Fail startup if the list can't be loaded (a cached copy counts as loaded) |
+| `recursion.roots` | `/usr/share/hickory-filter/root.hints` | File of root server hints that recursive mode starts from |
+| `recursion.dnssec` | `validate` | `validate` (built-in root trust anchor), `off`, or the path of a trust anchor file |
+| `recursion.qname_minimization` | `strict` | How much of a query name each name server sees: `strict` or `relaxed` |
+| `recursion.case_randomization` | `true` | Randomize the case of query names sent over UDP and reject responses that don't keep it |
+| `recursion.opportunistic_encryption` | `true` | Use TLS to name servers that accept it. Unauthenticated: passive observers only |
+| `recursion.state_file` | none | File that keeps what was learned about TLS support across restarts. Nothing is written without it |
 
 ### Resolver addresses
 

@@ -26,7 +26,7 @@ use tokio::{
 
 use crate::{
     cache::CachedLoader,
-    config::{Config, Http},
+    config::{Config, Http, Mode},
     fetch::{FetchError, FetchOutcome, Fetcher},
     filter_handler::FilterHandler,
     forwarder::{ForwarderError, build_catalog},
@@ -34,6 +34,7 @@ use crate::{
     lists::{RequiredListError, Source, Validators},
     logging::QueryLog,
     metrics,
+    recursion::RecursionError,
     refresh::{DefaultLoader, ListLoader, Refresher},
     rules::RuleError,
     ruleset::{LiveRules, RuleSet},
@@ -75,6 +76,7 @@ pub enum StartError {
     Rules(RuleError),
     Fetcher(FetchError),
     Forwarder(ForwarderError),
+    Recursion(RecursionError),
 }
 
 impl fmt::Display for StartError {
@@ -85,6 +87,7 @@ impl fmt::Display for StartError {
             Self::Rules(e) => e.fmt(f),
             Self::Fetcher(e) => write!(f, "cannot build the list fetcher: {e}"),
             Self::Forwarder(e) => e.fmt(f),
+            Self::Recursion(e) => e.fmt(f),
         }
     }
 }
@@ -112,6 +115,12 @@ impl From<RuleError> for StartError {
 impl From<FetchError> for StartError {
     fn from(e: FetchError) -> Self {
         Self::Fetcher(e)
+    }
+}
+
+impl From<RecursionError> for StartError {
+    fn from(e: RecursionError) -> Self {
+        Self::Recursion(e)
     }
 }
 
@@ -363,7 +372,10 @@ async fn serve_dns(
     let mut refresher = Refresher::new(loader, config, Arc::clone(&live))?;
     refresher.initial_load().await?;
 
-    let catalog = build_catalog(config)?;
+    let catalog = match config.mode {
+        Mode::Forward => build_catalog(config)?,
+        Mode::Recursive => crate::recursion::build_catalog(config).await?,
+    };
     let handler = FilterHandler::new(catalog, Arc::clone(&live), config.filter.response)
         .with_query_log(QueryLog::from_config(&config.log));
     let mut server = Server::new(handler);

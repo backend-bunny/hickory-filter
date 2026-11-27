@@ -17,7 +17,7 @@ arc-swap = "1.9.5"
 async-trait = "0.1.92"
 fst = "0.4.7"
 hickory-resolver = { version = "=0.26.4", features = ["tokio", "tls-aws-lc-rs", "rustls-platform-verifier", "metrics"] }
-hickory-server = { version = "=0.26.4", features = ["resolver"] }
+hickory-server = { version = "=0.26.4", features = ["resolver", "recursor", "dnssec-aws-lc-rs"] }
 humantime = "2.4.0"
 regex = "1.13.2"
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }

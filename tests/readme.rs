@@ -18,6 +18,11 @@ fn example_keys() -> BTreeSet<String> {
     let mut table = String::new();
     let mut keys = BTreeSet::new();
     for line in text.lines() {
+        // A commented-out table header (`# [recursion]`) still opens its table.
+        let line = line
+            .strip_prefix("# ")
+            .filter(|rest| rest.starts_with('['))
+            .unwrap_or(line);
         if let Some(name) = line.strip_prefix("[[").and_then(|l| l.strip_suffix("]]")) {
             table = format!("{name}[]");
         } else if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
@@ -101,12 +106,37 @@ fn every_documented_key_is_accepted_by_the_config() {
             "filter.lists[].required",
             "[[filter.lists]]\nrule = \"block list domain file:///x\"\nrequired = true",
         ),
+        ("mode", "mode = \"forward\""),
+        (
+            "recursion.roots",
+            "[recursion]\nroots = \"/tmp/root.hints\"",
+        ),
+        ("recursion.dnssec", "[recursion]\ndnssec = \"off\""),
+        (
+            "recursion.qname_minimization",
+            "[recursion]\nqname_minimization = \"relaxed\"",
+        ),
+        (
+            "recursion.case_randomization",
+            "[recursion]\ncase_randomization = false",
+        ),
+        (
+            "recursion.opportunistic_encryption",
+            "[recursion]\nopportunistic_encryption = false",
+        ),
+        (
+            "recursion.state_file",
+            "[recursion]\nstate_file = \"/tmp/tls.toml\"",
+        ),
     ];
     let documented = documented_keys();
     for (key, snippet) in snippets {
         assert!(documented.contains(key), "{key} is not documented");
         // Top-level keys must come before tables.
-        let text = if snippet.contains('[') {
+        let text = if key.starts_with("recursion.") {
+            // Recursive mode takes no upstreams.
+            format!("mode = \"recursive\"\n{snippet}\n")
+        } else if snippet.contains('[') {
             format!("upstreams = [\"192.0.2.53\"]\n{snippet}\n")
         } else {
             format!("{snippet}\nupstreams = [\"192.0.2.53\"]\n")
@@ -140,7 +170,31 @@ fn the_documented_defaults_are_the_defaults_in_the_code() {
             "listen",
             config.listen.iter().map(ToString::to_string).collect(),
         ),
+        ("mode", vec![lower(format!("{:?}", config.mode))]),
         ("cache_size", vec![config.cache_size.to_string()]),
+        (
+            "recursion.roots",
+            vec![hickory_filter::config::DEFAULT_ROOT_HINTS.to_owned()],
+        ),
+        (
+            "recursion.dnssec",
+            vec![lower(format!("{:?}", config.recursion().dnssec))],
+        ),
+        (
+            "recursion.qname_minimization",
+            vec![lower(format!(
+                "{:?}",
+                config.recursion().qname_minimization
+            ))],
+        ),
+        (
+            "recursion.case_randomization",
+            vec![config.recursion().case_randomization.to_string()],
+        ),
+        (
+            "recursion.opportunistic_encryption",
+            vec![config.recursion().opportunistic_encryption.to_string()],
+        ),
         (
             "http",
             vec![match config.http {
@@ -186,6 +240,7 @@ fn the_documented_defaults_are_the_defaults_in_the_code() {
         "filter.bootstrap",
         "filter.cache_dir",
         "filter.rules",
+        "recursion.state_file",
     ] {
         let row = rows
             .iter()

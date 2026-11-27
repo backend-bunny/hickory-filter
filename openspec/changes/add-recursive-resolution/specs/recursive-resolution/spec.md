@@ -28,9 +28,9 @@ The configuration SHALL have a `mode` setting with the values `forward` (the def
 In recursive mode a query that isn't blocked SHALL be resolved by asking the root servers, following delegations down to the authoritative servers, and returning the answer found there. No other resolver SHALL be asked to answer it.
 
 #### Scenario: Resolved through a delegation chain
-- **GIVEN** a root server that delegates `example.test` to a name server that answers `www.example.test`
+- **GIVEN** a root server that delegates `test` to a TLD server, which delegates `example.test` to a name server that answers `www.example.test`
 - **WHEN** a client queries `www.example.test`
-- **THEN** the client receives the name server's answer, and only the root and that name server were contacted
+- **THEN** the client receives the name server's answer, and only those three servers were contacted
 
 ### Requirement: Root server hints
 The root servers the resolution starts from SHALL be read at startup from a root hints file given by `recursion.roots`, defaulting to the file shipped with the image. A file that is missing, unreadable or lists no usable address SHALL fail startup with an error naming the file.

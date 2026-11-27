@@ -65,7 +65,7 @@ The library primes lazily, at the first query. At startup, after the listeners a
 - *Alternative:* ready as soon as the listeners are up. Simpler, but a misconfigured network looks healthy.
 
 ### D7. `cache_size` and `bootstrap` **[proposed]**
-`cache_size` sets the recursor's response cache size in recursive mode, with the same meaning as in forward mode. The library may not support a size of 0; if it doesn't, 0 is a startup error naming the key in recursive mode (checked in task 2.2). `filter.bootstrap` is unchanged (see Non-Goals).
+`cache_size` sets the recursor's response cache size in recursive mode, with the same meaning as in forward mode, including `0` to disable it (the library's response cache is the same bounded cache and accepts a size of 0; checked in task 2.2 and by a test that every query then reaches the authoritative server). The recursor's name server cache keeps the library's default size. `filter.bootstrap` is unchanged (see Non-Goals).
 
 ### D8. Features and dependencies
 `hickory-server` gets `recursor` and `dnssec-aws-lc-rs` (the TLS backend is already aws-lc-rs, so no second crypto library); the exact pin stays. `cargo deny` and the notices cover whatever new crates arrive. Binary and image size are measured and noted.

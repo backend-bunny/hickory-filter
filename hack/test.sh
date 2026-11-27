@@ -50,6 +50,15 @@ if [ -f "$ROOT/out/notices.json" ] && [ -f "$work/THIRD-PARTY-NOTICES.md" ]; the
   else check "notices list the same crates as notices.json and the binary" differ; fi
 else check "notices.json present" missing; fi
 docker rm "$cid" >/dev/null
+if python3 - "$ROOT/out/sbom.spdx.json" "$ROOT/out/notices.json" <<'PY'
+import json, sys
+sbom = json.load(open(sys.argv[1])); notices = json.load(open(sys.argv[2]))
+names = {(p["name"], p.get("versionInfo")) for p in sbom["packages"]}
+need = {("hickory-filter", None)} | {(c["name"], c["version"]) for c in notices["crates"] if c["name"] != "musl"}
+missing = [n for n in need if n not in names and not (n[1] is None and any(x[0] == n[0] for x in names))]
+sys.exit("SBOM lacks: %s" % sorted(missing)[:5] if missing else 0)
+PY
+then check "SBOM lists the hickory-filter package and every crate" ok; else check "SBOM lists the hickory-filter package and every crate" differ; fi
 
 # a local upstream that answers every A query with 192.0.2.1
 cat > "$work/upstream.py" <<PY

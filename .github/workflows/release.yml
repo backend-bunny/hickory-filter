@@ -81,7 +81,7 @@ jobs:
         run: |
           devbox run -- cosign sign --yes "$IMAGE@$DIGEST"
           devbox run -- cosign attest --yes --type spdxjson \
-            --predicate out/sbom-index.spdx.json "$IMAGE@$DIGEST"
+            --predicate out/sbom.spdx.json "$IMAGE@$DIGEST"
           # Licenses and notice files of the Rust crates in the binary.
           devbox run -- cosign attest --yes \
             --type https://github.com/backend-bunny/hickory-filter/notices/v1 \

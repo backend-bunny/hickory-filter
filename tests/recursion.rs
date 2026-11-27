@@ -97,6 +97,11 @@ impl Server {
         }
     }
 
+    /// The lines the server has logged to stderr since the last call.
+    fn logs(&self) -> Vec<String> {
+        self.process.lines.try_iter().collect()
+    }
+
     /// The files in the server's directory.
     fn files(&self) -> Vec<String> {
         files(&self.dir)
@@ -1138,4 +1143,72 @@ async fn the_built_in_trust_anchor_is_used_by_default() {
         "{answer:?}"
     );
     assert!(answer.answers.is_empty());
+}
+
+/// Which log lines name a domain a client asked about: the library's lines about
+/// individual lookups do, and the query log is the only place that may.
+fn lookup_lines(lines: &[String]) -> Vec<&String> {
+    lines
+        .iter()
+        .filter(|l| l.contains("hickory_resolver::recursor::handle") || l.contains("lookup error"))
+        .collect()
+}
+
+/// At the default log level the resolver's lines about individual lookups,
+/// which name the domains asked about, are not logged: individual queries are
+/// logged only at `debug` or with the query log on.
+#[tokio::test]
+async fn lookups_are_not_logged_by_default_and_are_at_debug() {
+    let Some(_ns) = netns::enter(
+        "lookups_are_not_logged_by_default_and_are_at_debug",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    // `example.test.` is an unsigned zone under a signed parent: resolving it
+    // makes the library look up (and log) records that don't exist.
+    let hierarchy = SignedHierarchy::start(Example::Unsigned).await;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let anchor = hierarchy.write_anchor(dir.path());
+    let setting = format!("dnssec = \"{}\"\n", anchor.display());
+
+    // Default level: answered, and nothing about the lookups in the log.
+    let quiet = Server::start_in(dir.path(), "", &setting, "");
+    assert_eq!(
+        a_records(&quiet.ask("www.example.test.").await),
+        vec![authority::WWW]
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let lines = quiet.logs();
+    assert!(
+        lookup_lines(&lines).is_empty(),
+        "the default log names looked-up domains: {:?}",
+        lookup_lines(&lines)
+    );
+    assert!(
+        !lines.iter().any(|l| l.contains("www.example.test")),
+        "the default log names the domain asked about: {lines:?}"
+    );
+    drop(quiet);
+
+    // At debug the same lookups are logged, which is what makes the check above
+    // mean something.
+    let loud = Server::start_in(
+        dir.path(),
+        "",
+        &setting,
+        "[log]
+level = \"debug\"
+",
+    );
+    assert_eq!(
+        a_records(&loud.ask("www.example.test.").await),
+        vec![authority::WWW]
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let lines = loud.logs();
+    assert!(
+        !lookup_lines(&lines).is_empty(),
+        "debug logs the lookups: {lines:?}"
+    );
 }

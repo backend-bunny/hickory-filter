@@ -3,6 +3,10 @@
 //! Logs go to stderr as plain text or JSON at the configured level. This
 //! crate's lines follow that level; other crates' lines are limited to
 //! warnings, so turning on `debug` doesn't bury the output in library noise.
+//! One library target is quieter still: the recursive resolver warns about every
+//! lookup that finds no records or times out, and each of those lines names the
+//! domain being looked up, so they are logged only at `debug` (individual
+//! queries are logged only there, or by the query log).
 //!
 //! The query log writes one line per answered query under a fixed target. It is
 //! off by default: queries are then only logged at `debug`. With it on, the
@@ -30,6 +34,10 @@ use crate::config::{Log, LogFormat, LogLevel, QueryLogClient};
 /// The target of every query-log line.
 pub const QUERY_TARGET: &str = "hickory_filter::query";
 
+/// The recursive resolver's target for lookups that found nothing or timed out.
+/// Its lines name the domains looked up, which are not logged below `debug`.
+const RECURSOR_LOOKUPS: &str = "hickory_resolver::recursor::handle";
+
 /// The fields of a query-log line, besides the message `query`.
 pub const QUERY_FIELDS: &[&str] = &["client", "name", "type", "outcome", "rcode", "duration_ms"];
 
@@ -51,7 +59,15 @@ where
     let level = level_filter(log.level);
     let mut targets = Targets::new()
         .with_default(level.min(LevelFilter::WARN))
-        .with_target("hickory_filter", level);
+        .with_target("hickory_filter", level)
+        .with_target(
+            RECURSOR_LOOKUPS,
+            if level >= LevelFilter::DEBUG {
+                LevelFilter::WARN
+            } else {
+                LevelFilter::OFF
+            },
+        );
     if log.query_log {
         // Query lines were asked for: they show even at a quieter level.
         targets = targets.with_target(QUERY_TARGET, level.max(LevelFilter::INFO));

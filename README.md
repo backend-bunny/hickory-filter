@@ -292,7 +292,10 @@ described by the series below instead of `hickory_resolver_cache_hit_total` and
 ### Query log
 
 The query log is off by default. Queries are then logged only at the `debug`
-level. With `query_log = true` in the `[log]` table, every answered query is
+level, and so are the recursive resolver's own lines about lookups that found no
+records or timed out, because they name the domains looked up. At the default level
+recursive mode logs one warning at startup, that opportunistic encryption doesn't
+verify certificates (see Recursive mode), and nothing per query. With `query_log = true` in the `[log]` table, every answered query is
 logged at `info` (and shows even at a quieter level), so that a log collector
 can turn the lines into per-client and per-name views. Lines carry the target
 `hickory_filter::query`; in JSON (`format = "json"`) the fields below are

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/backend-bunny/hickory-filter/compare/v0.1.1...v0.2.0) (2026-11-27)
+
+
+### Features
+
+* **recursion:** add a recursive resolution mode ([#52](https://github.com/backend-bunny/hickory-filter/issues/52)) ([1fe1aac](https://github.com/backend-bunny/hickory-filter/commit/1fe1aac3464c5fa464327aa219332b9daeb6109a))
+
 ## [0.1.1](https://github.com/backend-bunny/hickory-filter/compare/v0.1.0...v0.1.1) (2026-11-27)
 
 

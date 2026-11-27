@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/backend-bunny/hickory-filter/compare/v0.2.0...v0.3.0) (2026-11-27)
+
+
+### Features
+
+* **chart:** set the Service's dual-stack, traffic, address and load balancer options ([#58](https://github.com/backend-bunny/hickory-filter/issues/58)) ([b3f44af](https://github.com/backend-bunny/hickory-filter/commit/b3f44afd5452159f6d02236ea337c19bd72d8096))
+
+
+### Bug Fixes
+
+* **logging:** don't log the domains the recursive resolver looks up by default ([#55](https://github.com/backend-bunny/hickory-filter/issues/55)) ([691d82e](https://github.com/backend-bunny/hickory-filter/commit/691d82ef6af1be3d178bff849a666703d2069723))
+
 ## [0.2.0](https://github.com/backend-bunny/hickory-filter/compare/v0.1.1...v0.2.0) (2026-11-27)
 
 

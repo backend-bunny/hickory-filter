@@ -275,6 +275,10 @@ async fn a_blocked_name_sends_no_query_to_any_name_server() {
         "",
         "[filter]\nrules = [\"block domain ads.example.test\"]\n",
     );
+    // Startup sends one query to the root to check it can be reached; wait for
+    // it, so what is counted next is the client's.
+    server.wait_ready().await;
+    let before = hierarchy.queries_received();
 
     let blocked = server.ask("ads.example.test.").await;
     assert_eq!(blocked.metadata.response_code, ResponseCode::NoError);
@@ -283,7 +287,11 @@ async fn a_blocked_name_sends_no_query_to_any_name_server() {
         vec![std::net::Ipv4Addr::UNSPECIFIED],
         "the null block answer"
     );
-    assert_eq!(hierarchy.queries_received(), 0, "no name server was asked");
+    assert_eq!(
+        hierarchy.queries_received(),
+        before,
+        "the blocked query sent nothing to any name server"
+    );
 
     // An unblocked name next to it still resolves.
     assert_eq!(

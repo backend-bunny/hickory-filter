@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1](https://github.com/backend-bunny/hickory-filter/compare/v0.1.0...v0.1.1) (2026-11-27)
+
+
+### Bug Fixes
+
+* **deps:** update build toolchain ([#42](https://github.com/backend-bunny/hickory-filter/issues/42)) ([407fa12](https://github.com/backend-bunny/hickory-filter/commit/407fa12f67eb243dfc2b81f344f1fbf70e866eb5))
+* **image:** attest an SBOM that lists the image's packages and the binary's crates ([#45](https://github.com/backend-bunny/hickory-filter/issues/45)) ([0deeace](https://github.com/backend-bunny/hickory-filter/commit/0deeace3119c824e8efd4dd3e9d9f0b9094a1a8b))
+
 ## 0.1.0 (2026-11-27)
 
 

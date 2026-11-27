@@ -17,10 +17,10 @@ expect_fail() { # name, expected message, args...
 
 reset; expect_ok "committed versions agree"
 reset; expect_ok "matching tag" "v$v"
-reset; expect_fail "tag differs from the files" "Cargo.toml is '0.1.0', expected '9.9.9'" "v9.9.9"
+reset; expect_fail "tag differs from the files" "Cargo.toml is '$v', expected '9.9.9'" "v9.9.9"
 reset; expect_fail "malformed tag" "not vX.Y.Z" "1.2"
 reset; sed -i "0,/^version = \"$v\"/s//version = \"9.9.9\"/" "$work/Cargo.toml"; expect_fail "Cargo.toml differs from the tag" "Cargo.toml is '9.9.9', expected '$v'" "v$v"
-reset; sed -i "0,/^version = \"$v\"/s//version = \"9.9.9\"/" "$work/Cargo.lock"; expect_fail "Cargo.lock differs" "Cargo.lock is '9.9.9'"
+reset; awk '/^name = "hickory-filter"$/ {print; getline; sub(/"[^"]*"/, "\"9.9.9\""); print; next} {print}' "$work/Cargo.lock" > "$work/Cargo.lock.new" && mv "$work/Cargo.lock.new" "$work/Cargo.lock"; expect_fail "Cargo.lock differs" "Cargo.lock is '9.9.9'"
 reset; sed -i "s/^  version: $v/  version: 9.9.9/" "$work/melange.yaml"; expect_fail "melange differs" "melange.yaml is '9.9.9'"
 reset; sed -i "s/^version: $v/version: 9.9.9/" "$work/charts/hickory-filter/Chart.yaml"; expect_fail "chart version differs" "Chart.yaml version is '9.9.9'"
 reset; sed -i "s/^appVersion: \"$v\"/appVersion: \"9.9.9\"/" "$work/charts/hickory-filter/Chart.yaml"; expect_fail "chart appVersion differs" "Chart.yaml appVersion is '9.9.9'"

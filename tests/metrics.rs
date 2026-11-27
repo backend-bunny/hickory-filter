@@ -353,8 +353,15 @@ async fn metrics_reflect_queries_refreshes_and_failures_without_identifying_anyo
         state.body = "listed.example\nmore.example\n".to_owned();
         state.etag = "\"v2\"".to_owned();
     }
+    // The per-list gauges are recorded as each list applies and the swap is
+    // counted after the rebuild, so wait for the swap, not only the list.
     let changed = wait_for(http, Duration::from_secs(10), "the changed list", |s| {
         s.value("hickory_filter_list_rules", &list) == 2.0
+            && s.value("hickory_filter_ruleset_swaps_total", &[]) > swaps_before
+            && s.value(
+                "hickory_filter_rules",
+                &[("action", "block"), ("kind", "domain")],
+            ) == 3.0
     })
     .await;
     assert_eq!(

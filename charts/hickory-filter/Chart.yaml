@@ -2,5 +2,5 @@ apiVersion: v2
 name: hickory-filter
 description: A filtering DNS forwarder with allow/block rules and scheduled blocklist refresh.
 type: application
-version: 0.2.0 # x-release-please-version
-appVersion: "0.2.0" # x-release-please-version
+version: 0.3.0 # x-release-please-version
+appVersion: "0.3.0" # x-release-please-version

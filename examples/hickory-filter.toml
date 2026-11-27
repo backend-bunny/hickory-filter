@@ -94,3 +94,5 @@ required = false    # true: startup fails if this list cannot be loaded
 # opportunistic_encryption = true
 # Keep what was learned about TLS support across restarts (a writable path).
 # state_file = "/var/lib/hickory-filter/tls.toml"
+# How often that state is saved: a restart loses at most this much learning.
+# state_save_interval = "10m"

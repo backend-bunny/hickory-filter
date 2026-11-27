@@ -124,6 +124,10 @@ fn every_documented_key_is_accepted_by_the_config() {
             "recursion.state_file",
             "[recursion]\nstate_file = \"/tmp/tls.toml\"",
         ),
+        (
+            "recursion.state_save_interval",
+            "[recursion]\nstate_save_interval = \"30s\"",
+        ),
     ];
     let documented = documented_keys();
     for (key, snippet) in snippets {
@@ -186,6 +190,13 @@ fn the_documented_defaults_are_the_defaults_in_the_code() {
         (
             "recursion.opportunistic_encryption",
             vec![config.recursion().opportunistic_encryption.to_string()],
+        ),
+        (
+            "recursion.state_save_interval",
+            vec![format!(
+                "{}m",
+                config.recursion().state_save_interval.0.as_secs() / 60
+            )],
         ),
         (
             "http",

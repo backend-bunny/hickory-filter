@@ -113,7 +113,7 @@ Opportunistic encryption SHALL NOT verify the name server's certificate, and the
 - **THEN** it states that the encryption is unauthenticated, protects against passive observers only, and covers only servers that accept TLS
 
 ### Requirement: Encryption state persistence
-The server SHALL keep what it has learned about which name servers accept TLS in memory, and SHALL persist it across restarts only when `recursion.state_file` names a file. It SHALL NOT write that file or any other file otherwise.
+The server SHALL keep what it has learned about which name servers accept TLS in memory, and SHALL persist it across restarts only when `recursion.state_file` names a file, saving it every `recursion.state_save_interval` (default 10 minutes, and greater than zero). It SHALL NOT write that file or any other file otherwise.
 
 #### Scenario: State file configured
 - **GIVEN** `recursion.state_file` names a writable file and a server accepted TLS

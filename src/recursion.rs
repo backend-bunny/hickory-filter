@@ -14,6 +14,9 @@ use hickory_server::{
         rr::{LowerName, Name, RData, RecordSet, RecordType},
         serialize::txt::Parser,
     },
+    resolver::config::{
+        OpportunisticEncryption, OpportunisticEncryptionConfig, OpportunisticEncryptionPersistence,
+    },
     resolver::recursor::{
         DnssecPolicyConfig, QNameMinimization as LibQnameMinimization, RecursiveConfig,
         RecursorOptions,
@@ -83,6 +86,25 @@ fn recursive_config(recursion: &Recursion, cache_size: u64) -> RecursiveConfig {
     };
     let options = RecursorOptions {
         response_cache_size: cache_size,
+        // Unauthenticated: the library skips certificate verification for the
+        // probes, so this protects against passive observation only.
+        opportunistic_encryption: if recursion.opportunistic_encryption {
+            OpportunisticEncryption::Enabled {
+                config: OpportunisticEncryptionConfig {
+                    // Learned TLS support survives a restart only when a state
+                    // file is configured; otherwise nothing is written.
+                    persistence: recursion.state_file.as_ref().map(|path| {
+                        OpportunisticEncryptionPersistence {
+                            path: path.clone(),
+                            save_interval: recursion.state_save_interval.0,
+                        }
+                    }),
+                    ..OpportunisticEncryptionConfig::default()
+                },
+            }
+        } else {
+            OpportunisticEncryption::Disabled
+        },
         qname_minimization: match recursion.qname_minimization {
             QnameMinimization::Strict => LibQnameMinimization::Strict,
             QnameMinimization::Relaxed => LibQnameMinimization::Relaxed,

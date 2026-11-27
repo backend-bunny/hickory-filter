@@ -12,7 +12,7 @@ use std::{
 
 use hickory_server::{
     Server,
-    net::runtime::Time,
+    net::{runtime::Time, xfer::Protocol},
     proto::{
         op::{Metadata, ResponseCode},
         rr::{
@@ -59,6 +59,8 @@ pub struct Seen {
     /// The name as it arrived, case preserved, fully qualified.
     pub name: String,
     pub record_type: RecordType,
+    /// How it arrived: UDP, TCP or TLS.
+    pub protocol: Protocol,
 }
 
 type Script = dyn Fn(&str, RecordType) -> Say + Send + Sync;
@@ -81,6 +83,7 @@ impl RequestHandler for Handler {
         self.seen.lock().unwrap().push(Seen {
             name: name.clone(),
             record_type,
+            protocol: request.protocol(),
         });
         let say = (self.script)(&name.to_ascii_lowercase(), record_type);
         let mut metadata = Metadata::response_from_request(info.metadata);
@@ -109,6 +112,23 @@ impl FakeServer {
         address: Ipv4Addr,
         script: impl Fn(&str, RecordType) -> Say + Send + Sync + 'static,
     ) -> Self {
+        Self::start_with(address, false, script).await
+    }
+
+    /// Like `start`, and also accepting DNS-over-TLS on port 853 with a
+    /// self-signed certificate.
+    pub async fn start_tls(
+        address: Ipv4Addr,
+        script: impl Fn(&str, RecordType) -> Say + Send + Sync + 'static,
+    ) -> Self {
+        Self::start_with(address, true, script).await
+    }
+
+    async fn start_with(
+        address: Ipv4Addr,
+        tls: bool,
+        script: impl Fn(&str, RecordType) -> Say + Send + Sync + 'static,
+    ) -> Self {
         let seen = Arc::new(Mutex::new(Vec::new()));
         let udp = UdpSocket::bind(SocketAddr::from((address, 53)))
             .await
@@ -122,6 +142,18 @@ impl FakeServer {
         });
         server.register_socket(udp);
         server.register_listener(tcp, Duration::from_secs(5), 4096);
+        if tls {
+            let listener = TcpListener::bind(SocketAddr::from((address, 853)))
+                .await
+                .unwrap_or_else(|e| panic!("bind {address}:853 (tls): {e}"));
+            server
+                .register_tls_listener_with_tls_config(
+                    listener,
+                    Duration::from_secs(5),
+                    tls_config(),
+                )
+                .expect("register the TLS listener");
+        }
         Self {
             address,
             seen,
@@ -133,6 +165,25 @@ impl FakeServer {
     pub fn seen(&self) -> Vec<Seen> {
         self.seen.lock().unwrap().clone()
     }
+}
+
+/// A server certificate for `ns.example.test`, generated now and signed by
+/// itself: the recursor's opportunistic encryption doesn't verify it.
+fn tls_config() -> Arc<rustls::ServerConfig> {
+    let certified = rcgen::generate_simple_self_signed(vec!["ns.example.test".to_owned()])
+        .expect("certificate");
+    let key = rustls::pki_types::PrivateKeyDer::Pkcs8(rustls::pki_types::PrivatePkcs8KeyDer::from(
+        certified.signing_key.serialize_der(),
+    ));
+    let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+    let mut config = rustls::ServerConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .expect("protocol versions")
+        .with_no_client_auth()
+        .with_single_cert(vec![certified.cert.der().clone()], key)
+        .expect("server certificate");
+    config.alpn_protocols = vec![b"dot".to_vec()];
+    Arc::new(config)
 }
 
 pub fn name(text: &str) -> Name {
@@ -212,6 +263,16 @@ pub struct Hierarchy {
 
 impl Hierarchy {
     pub async fn start() -> Self {
+        Self::start_with(false).await
+    }
+
+    /// Like `start`, with an authoritative server that also accepts
+    /// DNS-over-TLS.
+    pub async fn start_tls_authority() -> Self {
+        Self::start_with(true).await
+    }
+
+    async fn start_with(tls_authority: bool) -> Self {
         let root = FakeServer::start(ROOT, |name, record_type| {
             if name == "." && record_type == RecordType::NS {
                 return Say {
@@ -248,7 +309,7 @@ impl Hierarchy {
             }
         })
         .await;
-        let authority = FakeServer::start(AUTHORITY, |name, record_type| {
+        let authority = FakeServer::start_with(AUTHORITY, tls_authority, |name, record_type| {
             let owner = name.to_owned();
             match (name, record_type) {
                 ("example.test.", RecordType::NS) => Say {

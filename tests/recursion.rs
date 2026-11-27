@@ -1,8 +1,13 @@
 //! Recursive mode, end to end, against fake root, TLD and authoritative
 //! servers in a network namespace (see `common::netns`).
 
-use std::{net::SocketAddr, path::PathBuf};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
+use hickory_server::net::xfer::Protocol;
 use hickory_server::proto::{
     op::{Message, ResponseCode},
     rr::{RData, RecordType},
@@ -13,7 +18,7 @@ use common::{
     authority::{self, Hierarchy},
     dns::ask_udp,
     netns,
-    process::{Process, http_get, http_status_line, spawn},
+    process::{Process, http_get, http_status_line, spawn, spawn_command},
 };
 
 /// A server in recursive mode starting from the fake root. DNSSEC is off:
@@ -22,25 +27,56 @@ struct Server {
     process: Process,
     addr: SocketAddr,
     http: SocketAddr,
-    _dir: tempfile::TempDir,
+    dir: PathBuf,
+    _dir: Option<tempfile::TempDir>,
+}
+
+/// Write the hints and a recursive-mode configuration into `dir`; returns the
+/// configuration file. `top` is extra top-level configuration, `recursion`
+/// extra `[recursion]` settings and `tables` further tables, written after it.
+fn write_config(dir: &Path, top: &str, recursion: &str, tables: &str) -> PathBuf {
+    let hints = authority::write_hints(dir);
+    let file = dir.join("config.toml");
+    std::fs::write(
+        &file,
+        format!(
+            "mode = \"recursive\"\nlisten = [\"127.0.0.1:0\"]\nhttp = \"127.0.0.1:0\"\n{top}\n\
+             [recursion]\nroots = \"{}\"\ndnssec = \"off\"\n{recursion}\n{tables}\n",
+            hints.display()
+        ),
+    )
+    .expect("write config");
+    file
+}
+
+/// The names of the files in `dir`, sorted.
+fn files(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .expect("read the directory")
+        .map(|entry| {
+            entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    names.sort();
+    names
 }
 
 impl Server {
-    /// `top` is extra top-level configuration, `recursion` extra `[recursion]`
-    /// settings and `tables` further tables, written after `[recursion]`.
+    /// A server with its own directory.
     fn start(top: &str, recursion: &str, tables: &str) -> Self {
         let dir = tempfile::tempdir().expect("tempdir");
-        let hints = authority::write_hints(dir.path());
-        let file: PathBuf = dir.path().join("config.toml");
-        std::fs::write(
-            &file,
-            format!(
-                "mode = \"recursive\"\nlisten = [\"127.0.0.1:0\"]\nhttp = \"127.0.0.1:0\"\n{top}\n\
-                 [recursion]\nroots = \"{}\"\ndnssec = \"off\"\n{recursion}\n{tables}\n",
-                hints.display()
-            ),
-        )
-        .expect("write config");
+        let mut server = Self::start_in(dir.path(), top, recursion, tables);
+        server._dir = Some(dir);
+        server
+    }
+
+    /// A server whose files live in `dir`, which the caller keeps.
+    fn start_in(dir: &Path, top: &str, recursion: &str, tables: &str) -> Self {
+        let file = write_config(dir, top, recursion, tables);
         let process = spawn(&file);
         // The listeners are announced before the endpoint.
         let addr = process.listening_addr();
@@ -49,8 +85,14 @@ impl Server {
             process,
             addr,
             http,
-            _dir: dir,
+            dir: dir.to_owned(),
+            _dir: None,
         }
+    }
+
+    /// The files in the server's directory.
+    fn files(&self) -> Vec<String> {
+        files(&self.dir)
     }
 
     /// The text of `/metrics`.
@@ -72,6 +114,17 @@ impl Server {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
         panic!("/ready never answered 200: {}", self.status("/ready"));
+    }
+
+    /// Wait until the sum of `name`'s samples that satisfy `keep` reaches `at_least`.
+    async fn wait_for_metric(&self, name: &str, keep: impl Fn(&str) -> bool, at_least: f64) {
+        for _ in 0..100 {
+            if metric(&self.metrics(), name, &keep) >= at_least {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        panic!("{name} never reached {at_least}:\n{}", self.metrics());
     }
 
     async fn ask(&self, name: &str) -> Message {
@@ -635,4 +688,290 @@ async fn each_name_server_sees_only_the_labels_it_needs() {
                 && q.record_type == RecordType::A),
         "only the authoritative server is asked for the full name"
     );
+}
+
+const TLS: &str = "protocol=\"tls\"";
+
+/// A name server that accepts DNS-over-TLS (with a certificate nobody
+/// verifies) is probed and then asked over TLS, and the metrics show it.
+#[tokio::test]
+async fn a_name_server_that_accepts_tls_is_asked_over_tls() {
+    let Some(_ns) = netns::enter(
+        "a_name_server_that_accepts_tls_is_asked_over_tls",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    let hierarchy = Hierarchy::start_tls_authority().await;
+    let server = Server::start("", "", "");
+
+    // The first query goes out in the clear while the server is probed.
+    assert_eq!(
+        a_records(&server.ask("www.example.test.").await),
+        vec![authority::WWW]
+    );
+    server
+        .wait_for_metric(
+            "hickory_resolver_probe_successes_total",
+            |l| l.contains(TLS),
+            1.0,
+        )
+        .await;
+
+    // After the probe, queries to it use TLS.
+    assert_eq!(
+        a_records(&server.ask("ads.example.test.").await),
+        vec![authority::ADS]
+    );
+    let over_tls: Vec<_> = hierarchy
+        .authority
+        .seen()
+        .into_iter()
+        .filter(|q| q.protocol == Protocol::Tls)
+        .collect();
+    assert!(
+        over_tls
+            .iter()
+            .any(|q| q.name.eq_ignore_ascii_case("ads.example.test.")),
+        "the authoritative server was asked over TLS: {:?}",
+        hierarchy.authority.seen()
+    );
+    let metrics = server.metrics();
+    assert!(
+        metric(&metrics, "hickory_resolver_outgoing_queries_total", |l| l
+            .contains(TLS))
+            >= 1.0,
+        "the tls transport is counted:\n{metrics}"
+    );
+    // Without a state file the server writes nothing at all.
+    assert_eq!(server.files(), ["config.toml", "root.hints"]);
+}
+
+/// A name server that doesn't accept TLS is still answered, in the clear; the
+/// probes that failed are counted.
+#[tokio::test]
+async fn a_name_server_that_does_not_accept_tls_is_answered_in_the_clear() {
+    let Some(_ns) = netns::enter(
+        "a_name_server_that_does_not_accept_tls_is_answered_in_the_clear",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    let hierarchy = Hierarchy::start().await;
+    let server = Server::start("", "", "");
+
+    assert_eq!(
+        a_records(&server.ask("www.example.test.").await),
+        vec![authority::WWW]
+    );
+    server
+        .wait_for_metric(
+            "hickory_resolver_probe_attempts_total",
+            |l| l.contains(TLS),
+            1.0,
+        )
+        .await;
+    assert_eq!(
+        a_records(&server.ask("ads.example.test.").await),
+        vec![authority::ADS]
+    );
+
+    for query in hierarchy.seen().concat() {
+        assert_ne!(
+            query.protocol,
+            Protocol::Tls,
+            "no TLS to a plain server: {query:?}"
+        );
+    }
+    let metrics = server.metrics();
+    assert_eq!(
+        metric(&metrics, "hickory_resolver_probe_successes_total", |l| l
+            .contains(TLS)),
+        0.0,
+        "{metrics}"
+    );
+    assert_eq!(
+        metric(&metrics, "hickory_resolver_outgoing_queries_total", |l| l
+            .contains(TLS)),
+        0.0
+    );
+}
+
+/// With `opportunistic_encryption = false` nothing is probed and nothing goes
+/// over TLS, even to a server that would accept it.
+#[tokio::test]
+async fn with_encryption_off_no_tls_is_attempted() {
+    let Some(_ns) = netns::enter(
+        "with_encryption_off_no_tls_is_attempted",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    let hierarchy = Hierarchy::start_tls_authority().await;
+    let server = Server::start("", "opportunistic_encryption = false", "");
+
+    assert_eq!(
+        a_records(&server.ask("www.example.test.").await),
+        vec![authority::WWW]
+    );
+    assert_eq!(
+        a_records(&server.ask("ads.example.test.").await),
+        vec![authority::ADS]
+    );
+    // Give a probe, if one were going to happen, time to show.
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    let metrics = server.metrics();
+    assert_eq!(
+        metric(&metrics, "hickory_resolver_probe_attempts_total", |_| true),
+        0.0,
+        "{metrics}"
+    );
+    assert_eq!(
+        metric(&metrics, "hickory_resolver_outgoing_queries_total", |l| l
+            .contains(TLS)),
+        0.0
+    );
+    assert!(
+        hierarchy
+            .authority
+            .seen()
+            .iter()
+            .all(|q| q.protocol != Protocol::Tls)
+    );
+}
+
+/// What was learned about a name server's TLS support is saved to the state
+/// file and used after a restart, without probing again.
+#[tokio::test]
+async fn a_restart_reuses_the_saved_tls_state() {
+    let Some(_ns) = netns::enter(
+        "a_restart_reuses_the_saved_tls_state",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    let hierarchy = Hierarchy::start_tls_authority().await;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let state = dir.path().join("tls-state.toml");
+    let recursion = format!(
+        "state_file = \"{}\"\nstate_save_interval = \"1s\"\n",
+        state.display()
+    );
+
+    // First run: the authoritative server is probed and found to accept TLS,
+    // and the state is saved with that knowledge.
+    let first = Server::start_in(dir.path(), "", &recursion, "");
+    assert_eq!(
+        a_records(&first.ask("www.example.test.").await),
+        vec![authority::WWW]
+    );
+    first
+        .wait_for_metric(
+            "hickory_resolver_probe_successes_total",
+            |l| l.contains(TLS),
+            1.0,
+        )
+        .await;
+    let address = authority::AUTHORITY.to_string();
+    for _ in 0..100 {
+        if std::fs::read_to_string(&state).is_ok_and(|text| text.contains(&address)) {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    let saved = std::fs::read_to_string(&state).expect("the state file was written");
+    assert!(
+        saved.contains(&address),
+        "the state names the server:\n{saved}"
+    );
+    drop(first);
+
+    // Second run, same state file: its first contact with the authoritative
+    // server is already over TLS.
+    let before = hierarchy.authority.seen().len();
+    let second = Server::start_in(dir.path(), "", &recursion, "");
+    assert_eq!(
+        a_records(&second.ask("ads.example.test.").await),
+        vec![authority::ADS]
+    );
+    let after: Vec<_> = hierarchy.authority.seen().split_off(before);
+    assert!(
+        !after.is_empty(),
+        "the second run asked the authoritative server"
+    );
+    assert!(
+        after.iter().all(|q| q.protocol == Protocol::Tls),
+        "every query after the restart went over TLS: {after:?}"
+    );
+}
+
+/// Recursive mode in the restricted container (an unprivileged user, no
+/// capabilities, a read-only root filesystem) serves queries and writes no
+/// file, because nothing is configured to be written.
+#[tokio::test]
+async fn recursive_mode_runs_in_the_restricted_container_and_writes_no_file() {
+    let Some(_ns) = netns::enter(
+        "recursive_mode_runs_in_the_restricted_container_and_writes_no_file",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    let probe = Command::new("bwrap")
+        .args(["--unshare-user", "--ro-bind", "/", "/", "true"])
+        .output();
+    if !probe.as_ref().is_ok_and(|o| o.status.success()) {
+        assert!(
+            std::env::var_os("HICKORY_REQUIRE_SANDBOX").is_none(),
+            "HICKORY_REQUIRE_SANDBOX is set but there is no usable sandbox: {probe:?}"
+        );
+        eprintln!("skipping: bwrap with a user namespace isn't available here");
+        return;
+    }
+    let _hierarchy = Hierarchy::start().await;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let config = write_config(dir.path(), "", "", "");
+
+    let mut command = Command::new("bwrap");
+    command
+        .args([
+            "--unshare-user",
+            "--uid",
+            "65532",
+            "--gid",
+            "65532",
+            "--cap-drop",
+            "ALL",
+        ])
+        .args([
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--chdir",
+            "/",
+            "--die-with-parent",
+            "--",
+        ])
+        .arg(env!("CARGO_BIN_EXE_hickory-filter"))
+        .arg("--config")
+        .arg(&config);
+    let process = spawn_command(command);
+    let addr = process.listening_addr();
+    let http = process.http_addr();
+
+    assert_eq!(
+        a_records(&ask_udp(addr, "www.example.test.", RecordType::A).await),
+        vec![authority::WWW]
+    );
+    assert!(http_status_line(http, "/health").contains(" 200"));
+    for _ in 0..100 {
+        if http_status_line(http, "/ready").contains(" 200") {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert!(http_status_line(http, "/ready").contains(" 200"));
+    assert_eq!(files(dir.path()), ["config.toml", "root.hints"]);
 }

@@ -154,6 +154,7 @@ Keys of the `[filter]`, `[filter.response]`, `[log]`, `[recursion]` and
 | `recursion.qname_minimization` | `strict` | How much of a query name each name server sees: `strict` or `relaxed` |
 | `recursion.opportunistic_encryption` | `true` | Use TLS to name servers that accept it. Unauthenticated: passive observers only |
 | `recursion.state_file` | none | File that keeps what was learned about TLS support across restarts. Nothing is written without it |
+| `recursion.state_save_interval` | `10m` | How often that state is saved, so a restart loses at most this much learning |
 
 ### Resolver addresses
 

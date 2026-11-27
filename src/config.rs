@@ -169,6 +169,12 @@ impl Config {
                         "a trust anchor path must not be empty",
                     ));
                 }
+                if recursion.state_save_interval.is_disabled() {
+                    return Err(invalid(
+                        "recursion.state_save_interval",
+                        "must be greater than zero",
+                    ));
+                }
                 if recursion.state_file.is_some() && !recursion.opportunistic_encryption {
                     return Err(invalid(
                         "recursion.state_file",
@@ -455,6 +461,10 @@ pub struct Recursion {
     /// only file recursive mode writes; without it nothing is persisted.
     #[serde(default)]
     pub state_file: Option<PathBuf>,
+    /// How often that state is saved: what a restart can lose is at most this
+    /// much learning. Default 10 minutes; `0` is not allowed.
+    #[serde(default = "default_state_save_interval")]
+    pub state_save_interval: Interval,
 }
 
 impl Default for Recursion {
@@ -465,12 +475,17 @@ impl Default for Recursion {
             qname_minimization: QnameMinimization::default(),
             opportunistic_encryption: true,
             state_file: None,
+            state_save_interval: default_state_save_interval(),
         }
     }
 }
 
 fn default_roots() -> PathBuf {
     PathBuf::from(DEFAULT_ROOT_HINTS)
+}
+
+fn default_state_save_interval() -> Interval {
+    Interval(Duration::from_secs(10 * 60))
 }
 
 fn default_true() -> bool {
@@ -1055,6 +1070,23 @@ mod tests {
             "mode = \"recursive\"\n[recursion]\nopportunistic_encryption = false\nstate_file = \"/x\"\n",
         );
         assert!(text.contains("recursion.state_file"), "{text}");
+    }
+
+    #[test]
+    fn the_state_save_interval_defaults_to_ten_minutes_and_must_be_positive() {
+        let config = parse("mode = \"recursive\"").expect("valid");
+        assert_eq!(
+            config.recursion().state_save_interval,
+            Interval(Duration::from_secs(600))
+        );
+        let config = parse("mode = \"recursive\"\n[recursion]\nstate_save_interval = \"30s\"\n")
+            .expect("valid");
+        assert_eq!(
+            config.recursion().state_save_interval,
+            Interval(Duration::from_secs(30))
+        );
+        let text = error_text("mode = \"recursive\"\n[recursion]\nstate_save_interval = 0\n");
+        assert!(text.contains("recursion.state_save_interval"), "{text}");
     }
 
     #[test]

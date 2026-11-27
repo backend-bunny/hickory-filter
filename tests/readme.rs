@@ -117,10 +117,6 @@ fn every_documented_key_is_accepted_by_the_config() {
             "[recursion]\nqname_minimization = \"relaxed\"",
         ),
         (
-            "recursion.case_randomization",
-            "[recursion]\ncase_randomization = false",
-        ),
-        (
             "recursion.opportunistic_encryption",
             "[recursion]\nopportunistic_encryption = false",
         ),
@@ -186,10 +182,6 @@ fn the_documented_defaults_are_the_defaults_in_the_code() {
                 "{:?}",
                 config.recursion().qname_minimization
             ))],
-        ),
-        (
-            "recursion.case_randomization",
-            vec![config.recursion().case_randomization.to_string()],
         ),
         (
             "recursion.opportunistic_encryption",

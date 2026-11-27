@@ -7,7 +7,7 @@ hickory-filter forwards every query it doesn't block to upstream resolvers that 
 ## What Changes
 
 - **A recursive mode.** A new `mode` setting selects `forward` (today's behaviour, the default) or `recursive`. In recursive mode, queries that aren't blocked are resolved by iterating from the root servers down to the authoritative servers, with no third-party resolver involved. The two modes are exclusive and there is no automatic fallback from one to the other, because a silent fallback would send queries to exactly the operators the mode exists to avoid.
-- **Integrity by default.** Recursive mode validates DNSSEC against the root trust anchor, so a spoofed or tampered answer becomes SERVFAIL. It also uses QNAME minimization (each server sees only the labels it needs) and 0x20 case randomization (a spoofing mitigation for UDP). Each can be changed.
+- **Integrity by default.** Recursive mode validates DNSSEC against the root trust anchor, so a spoofed or tampered answer becomes SERVFAIL. It also uses QNAME minimization (each server sees only the labels it needs), which can be relaxed. 0x20 case randomization, a further spoofing mitigation for UDP, is not part of this change: the library doesn't apply it yet (see the design's future improvements).
 - **Opportunistic encryption, on by default.** Recursive mode probes authoritative servers for TLS and uses it where it is accepted. It is unauthenticated and protects against passive observers only, for servers that accept TLS only. It can be turned off, and the documentation says what it does and doesn't give. Stronger network privacy (a VPN or other private egress) is documented guidance, not built.
 - **Operating it.** `/ready` additionally waits for the root servers to be reachable, queries that can't be resolved return SERVFAIL (never a blocked-style answer and never a forwarded one), the existing upstream and cache metrics describe the name servers contacted, and the metrics' protocol label shows how much traffic was actually encrypted.
 - **Packaging.** The image ships the root server hints the recursor starts from, the chart's values schema accepts the new settings, and the chart's NetworkPolicy does not restrict the egress recursion needs.
@@ -17,7 +17,7 @@ hickory-filter forwards every query it doesn't block to upstream resolvers that 
 
 ### New Capabilities
 
-- `recursive-resolution`: the recursive mode: how it is selected, how it resolves from the roots, its failure behaviour, DNSSEC validation, QNAME minimization, case randomization, name server address filtering, opportunistic encryption, and how filtering behaves unchanged on top of it.
+- `recursive-resolution`: the recursive mode: how it is selected, how it resolves from the roots, its failure behaviour, DNSSEC validation, QNAME minimization, name server address filtering, opportunistic encryption, and how filtering behaves unchanged on top of it.
 
 ### Modified Capabilities
 

@@ -83,7 +83,6 @@ fn recursive_config(recursion: &Recursion, cache_size: u64) -> RecursiveConfig {
     };
     let options = RecursorOptions {
         response_cache_size: cache_size,
-        case_randomization: recursion.case_randomization,
         qname_minimization: match recursion.qname_minimization {
             QnameMinimization::Strict => LibQnameMinimization::Strict,
             QnameMinimization::Relaxed => LibQnameMinimization::Relaxed,

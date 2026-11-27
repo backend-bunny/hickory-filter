@@ -7,7 +7,7 @@ See proposal.md for the motivation. Today `build_catalog` (`src/forwarder.rs`) b
 What the library offers, observed in `hickory-server` 0.26.4 and `hickory-resolver` 0.26.4:
 
 - `hickory-server` has a public `RecursiveZoneHandler` behind its `recursor` feature (which enables `hickory-resolver/recursor`). It is a zone handler like `ForwardZoneHandler` and plugs into the same `Catalog`. Its only constructor, `try_from_config`, takes a `RecursiveConfig` whose `roots` is a **file** of root hints that is read from disk.
-- `RecursorOptions` has `qname_minimization` (default strict), `case_randomization` (default off), `opportunistic_encryption` (default disabled; periods of 3 days for success and 1 day for failure, a cap on concurrent probes and an optional state file), `deny_server` (defaults to loopback, private, link-local, documentation, multicast and other non-routable ranges), recursion limits and cache sizes.
+- `RecursorOptions` has `qname_minimization` (default strict), `case_randomization` (present, but not applied by the recursor's query path; see Future improvements), `opportunistic_encryption` (default disabled; periods of 3 days for success and 1 day for failure, a cap on concurrent probes and an optional state file), `deny_server` (defaults to loopback, private, link-local, documentation, multicast and other non-routable ranges), recursion limits and cache sizes.
 - The DNSSEC policy is security-unaware by default. Validation needs the `dnssec-aws-lc-rs` feature and uses a static trust anchor (the library's built-in one, or a file); automatic trust anchor rollover is not implemented there.
 - Roots and glue addresses are IP-only, so name servers are contacted on port 53. The library's metrics cover outgoing queries by protocol, name server responses by outcome and cache hits, misses and size.
 - With opportunistic encryption on, the recursor disables TLS peer verification for the probes.
@@ -18,7 +18,7 @@ The image is distroless with a read-only root filesystem, and the chart mounts t
 
 **Goals:**
 - A recursive mode that keeps every filtering behaviour and the existing observability, and that fails visibly, never by sending a query somewhere else.
-- Defaults that make recursive mode safe to use: validation, name minimization and case randomization on, opportunistic encryption on.
+- Defaults that make recursive mode safe to use: validation and name minimization on, opportunistic encryption on.
 - Hermetic tests of the resolution chain, failure, DNSSEC and encryption that need no internet.
 
 **Non-Goals:**
@@ -51,7 +51,7 @@ The hints file is installed at `/usr/share/hickory-filter/root.hints` (through t
 - Recursive stays opt-in for the first release so forward deployments see no change.
 
 ### D4. Defaults **[confirmed: DNSSEC in scope, encryption on; proposed: the rest]**
-In recursive mode: DNSSEC validation on, QNAME minimization strict, 0x20 case randomization on, opportunistic encryption on, and the library's non-routable server ranges refused. Configuration, all under `[recursion]`: `roots`, `dnssec` (`"validate"`, `"off"`, or a trust anchor file path), `qname_minimization` (`"strict"`, `"relaxed"`), `case_randomization`, `opportunistic_encryption`, `state_file`. The library's limits and cache sizes stay at its defaults.
+In recursive mode: DNSSEC validation on, QNAME minimization strict, opportunistic encryption on, and the library's non-routable server ranges refused. Configuration, all under `[recursion]`: `roots`, `dnssec` (`"validate"`, `"off"`, or a trust anchor file path), `qname_minimization` (`"strict"`, `"relaxed"`), `opportunistic_encryption`, `state_file`. There is no case randomization setting (see Future improvements). The library's limits and cache sizes stay at its defaults.
 - *Why validation on:* over plain UDP a recursor otherwise trusts whatever answer arrives first, which is weaker than verified DNS-over-TLS to one upstream. Validation is what makes "independence" not cost integrity.
 - *Trust anchor staleness:* the anchor is static. When the root key rolls and the library's anchor is out of date, validating answers fail until the library is bumped. The mitigations are the `dnssec` file option and `"off"`, and a risk note below.
 
@@ -84,9 +84,14 @@ The library primes lazily, at the first query. At startup, after the listeners a
 - [Outbound port 53 is blocked or intercepted on some networks] → The pod never becomes ready and the failure is visible; no silent fallback.
 - [Root trust anchor rollover leaves validating answers failing until the library is bumped] → The `dnssec` file and `"off"` options; a release note when the library's anchor changes; revisit when the library implements rollover.
 - [An open recursive listener can be used for amplification] → Same exposure as the open forwarder today, larger load; documented, access control left for a later change.
+- [Forged UDP answers for unsigned zones are only held off by random transaction IDs and source ports] → DNSSEC covers signed zones; 0x20 case randomization is a future improvement, once the library applies it
 - [Cache and recursion limits stay at the library defaults, which may be wrong for small deployments] → Measure memory with the dashboard and the existing memory benchmark, expose a knob only if the numbers ask for it.
 - [Bogus answers and other SERVFAILs look the same to a client] → Check whether the library tells them apart so a metric can; not required by the specs.
 - [The hints file ages] → It is data in the repository, refreshed through a reviewed change, and the recursor replaces it with the live set after first contact.
+
+## Future improvements
+
+- **0x20 case randomization.** Randomizing the case of query names sent over UDP, and rejecting answers that don't repeat it, makes a forged answer harder to land (about one more bit to guess per letter in the name). It was in the first proposal and is left out because the library doesn't deliver it: `hickory-resolver` 0.26.4, the latest release when this was written, has `RecursorOptions::case_randomization`, but the recursor's query path builds its request options without it, so queries leave in lower case whatever the setting (seen in a test against fake servers with the option on). There is therefore no `recursion.case_randomization` setting, and a configuration that names it fails at load as an unknown key. Do this once `hickory-server` applies the option: add the setting (on by default), and restore the two tests that were written and removed: a name server that answers with a lower-case question is rejected over UDP, and the same server is accepted with the setting off, which proves the rejection is the randomization. It may be worth reporting to the library's maintainers.
 
 ## Migration Plan
 

@@ -71,18 +71,13 @@ By default the server SHALL validate DNSSEC for the answers it resolves, using t
 - **WHEN** a client queries a name in a zone whose signatures are invalid
 - **THEN** the client receives the answer
 
-### Requirement: Name minimization and case randomization
-By default each name server SHALL be sent only as much of the query name as it needs to see (QNAME minimization, strict), and the case of query names sent over UDP SHALL be randomized, with responses that don't preserve it rejected. `recursion.qname_minimization` SHALL accept `strict` (the default) and `relaxed`, and `recursion.case_randomization` SHALL accept `true` (the default) and `false`.
+### Requirement: Name minimization
+By default each name server SHALL be sent only as much of the query name as it needs to see (QNAME minimization, strict). `recursion.qname_minimization` SHALL accept `strict` (the default) and `relaxed`.
 
 #### Scenario: Minimized query
 - **GIVEN** a root server and a TLD server observing the queries they receive
 - **WHEN** a client queries `www.example.test`
 - **THEN** the root server doesn't receive the full name and the TLD server receives at most `example.test`
-
-#### Scenario: Case not preserved
-- **GIVEN** a name server that answers in lower case regardless of the query's case
-- **WHEN** a query is sent to it over UDP with randomized case
-- **THEN** its answer over UDP is rejected
 
 ### Requirement: Name server address filtering
 The server SHALL NOT send queries to name servers at loopback, private, link-local, documentation, multicast or otherwise non-routable addresses, even when a delegation names one, so that a delegation can't make the server probe its own network.

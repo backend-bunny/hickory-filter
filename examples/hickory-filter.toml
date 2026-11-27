@@ -89,8 +89,6 @@ required = false    # true: startup fails if this list cannot be loaded
 # dnssec = "validate"
 # How much of a query name each name server sees: "strict" or "relaxed".
 # qname_minimization = "strict"
-# Randomize the case of query names sent over UDP (a spoofing mitigation).
-# case_randomization = true
 # Use TLS to name servers that accept it. Unauthenticated: it protects against
 # passive observation only, and only for servers that accept TLS.
 # opportunistic_encryption = true

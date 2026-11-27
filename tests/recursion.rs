@@ -600,3 +600,39 @@ async fn recursive_mode_metrics_show_the_cache_and_the_name_servers() {
         }
     }
 }
+
+/// With QNAME minimization (the default) each name server sees only as much of
+/// the name as it needs: the root never the full name, the TLD server at most
+/// the second-level name.
+#[tokio::test]
+async fn each_name_server_sees_only_the_labels_it_needs() {
+    let Some(_ns) = netns::enter(
+        "each_name_server_sees_only_the_labels_it_needs",
+        &authority::addresses(),
+    ) else {
+        return;
+    };
+    let hierarchy = Hierarchy::start().await;
+    let server = Server::start("", "", "");
+    assert_eq!(
+        a_records(&server.ask("www.example.test.").await),
+        vec![authority::WWW]
+    );
+
+    let labels = |name: &str| name.trim_end_matches('.').split('.').count();
+    for query in hierarchy.root.seen() {
+        assert!(labels(&query.name) <= 1, "the root saw {:?}", query);
+    }
+    for query in hierarchy.tld.seen() {
+        assert!(labels(&query.name) <= 2, "the TLD server saw {:?}", query);
+    }
+    assert!(
+        hierarchy
+            .authority
+            .seen()
+            .iter()
+            .any(|q| q.name.eq_ignore_ascii_case("www.example.test.")
+                && q.record_type == RecordType::A),
+        "only the authoritative server is asked for the full name"
+    );
+}

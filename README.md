@@ -152,7 +152,6 @@ Keys of the `[filter]`, `[filter.response]`, `[log]`, `[recursion]` and
 | `recursion.roots` | `/usr/share/hickory-filter/root.hints` | File of root server hints that recursive mode starts from |
 | `recursion.dnssec` | `validate` | `validate` (built-in root trust anchor), `off`, or the path of a trust anchor file |
 | `recursion.qname_minimization` | `strict` | How much of a query name each name server sees: `strict` or `relaxed` |
-| `recursion.case_randomization` | `true` | Randomize the case of query names sent over UDP and reject responses that don't keep it |
 | `recursion.opportunistic_encryption` | `true` | Use TLS to name servers that accept it. Unauthenticated: passive observers only |
 | `recursion.state_file` | none | File that keeps what was learned about TLS support across restarts. Nothing is written without it |
 

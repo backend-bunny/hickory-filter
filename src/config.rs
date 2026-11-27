@@ -446,10 +446,6 @@ pub struct Recursion {
     /// How much of a query name each name server sees.
     #[serde(default)]
     pub qname_minimization: QnameMinimization,
-    /// Randomize the case of query names sent over UDP and reject responses
-    /// that don't preserve it. On by default.
-    #[serde(default = "default_true")]
-    pub case_randomization: bool,
     /// Probe name servers for DNS-over-TLS and use it where they accept it.
     /// Unauthenticated: it protects against passive observation only. On by
     /// default.
@@ -467,7 +463,6 @@ impl Default for Recursion {
             roots: default_roots(),
             dnssec: Dnssec::default(),
             qname_minimization: QnameMinimization::default(),
-            case_randomization: true,
             opportunistic_encryption: true,
             state_file: None,
         }
@@ -975,7 +970,6 @@ mod tests {
         assert_eq!(recursion.roots, PathBuf::from(DEFAULT_ROOT_HINTS));
         assert_eq!(recursion.dnssec, Dnssec::Validate);
         assert_eq!(recursion.qname_minimization, QnameMinimization::Strict);
-        assert!(recursion.case_randomization);
         assert!(recursion.opportunistic_encryption);
         assert!(recursion.state_file.is_none());
     }
@@ -1007,7 +1001,7 @@ mod tests {
     fn recursion_settings_are_read() {
         let config = parse(
             "mode = \"recursive\"\n[recursion]\nroots = \"/tmp/hints\"\ndnssec = \"off\"\n\
-             qname_minimization = \"relaxed\"\ncase_randomization = false\n\
+             qname_minimization = \"relaxed\"\n\
              opportunistic_encryption = true\nstate_file = \"/var/lib/hf/tls.toml\"\n",
         )
         .expect("valid");
@@ -1015,7 +1009,6 @@ mod tests {
         assert_eq!(r.roots, PathBuf::from("/tmp/hints"));
         assert_eq!(r.dnssec, Dnssec::Off);
         assert_eq!(r.qname_minimization, QnameMinimization::Relaxed);
-        assert!(!r.case_randomization);
         assert!(r.opportunistic_encryption);
         assert_eq!(r.state_file, Some(PathBuf::from("/var/lib/hf/tls.toml")));
     }
@@ -1042,8 +1035,18 @@ mod tests {
 
     #[test]
     fn an_unknown_key_in_the_recursion_table_is_rejected() {
-        let text = error_text("mode = \"recursive\"\n[recursion]\ncase_randomisation = true\n");
-        assert!(text.contains("case_randomisation"), "{text}");
+        let text =
+            error_text("mode = \"recursive\"\n[recursion]\nqname_minimisation = \"strict\"\n");
+        assert!(text.contains("qname_minimisation"), "{text}");
+    }
+
+    /// The library doesn't apply 0x20 case randomization in its recursor
+    /// (hickory 0.26.4), so there is no such setting; a configuration that
+    /// asks for it is rejected rather than silently ignored.
+    #[test]
+    fn case_randomization_is_not_a_setting() {
+        let text = error_text("mode = \"recursive\"\n[recursion]\ncase_randomization = true\n");
+        assert!(text.contains("case_randomization"), "{text}");
     }
 
     #[test]

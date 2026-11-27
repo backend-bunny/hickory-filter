@@ -3,7 +3,7 @@
 ## 1. Dependencies and configuration
 
 - [x] 1.1 Enable the `recursor` and `dnssec-aws-lc-rs` features of `hickory-server` (the exact pin stays) and regenerate `Cargo.lock`; verify `cargo build --locked`, `cargo deny check licenses` and the notices generation pass, and record the binary size before and after
-- [x] 1.2 Add `mode` (`forward` default, `recursive`) and the `[recursion]` table (`roots`, `dnssec`, `qname_minimization`, `case_randomization`, `opportunistic_encryption`, `state_file`) to the configuration with `deny_unknown_fields`, and validate that `upstreams` is rejected in recursive mode and `[recursion]` in forward mode, each error naming the key; verify unit tests for every mode scenario and `--check` on each configuration
+- [x] 1.2 Add `mode` (`forward` default, `recursive`) and the `[recursion]` table (`roots`, `dnssec`, `qname_minimization`, `opportunistic_encryption`, `state_file`) to the configuration with `deny_unknown_fields`, and validate that `upstreams` is rejected in recursive mode and `[recursion]` in forward mode, each error naming the key; verify unit tests for every mode scenario and `--check` on each configuration
 - [x] 1.3 Document the new keys in `examples/hickory-filter.toml` and the README configuration reference; verify the README drift tests pass and that the example runs through `--check`
 
 ## 2. Recursion core
@@ -21,7 +21,7 @@
 
 ## 4. Privacy defaults
 
-- [ ] 4.1 Map `qname_minimization` and `case_randomization` (defaults strict and on); verify harness tests that the root server never receives the full name and the TLD server at most the second-level name, and that an answer which doesn't preserve the query's case is rejected over UDP
+- [x] 4.1 Map `qname_minimization` (default strict); verify a harness test that the root server never receives the full name and the TLD server at most the second-level name, and a config test that `case_randomization` is rejected as an unknown key (0x20 case randomization is a future improvement, see the design)
 - [ ] 4.2 Map `opportunistic_encryption` (default on) and add a fake name server that accepts TLS with a self-signed certificate to the harness; verify tests that queries to it move to TLS and the `tls` count rises, that a plain-only server is still answered, and that `false` attempts no TLS connection
 - [ ] 4.3 Implement `recursion.state_file` (persist the learned TLS support across restarts; no file written without it); verify a harness test that a restart reuses the state without probing, and the restricted-container sandbox test in recursive mode without a state file writes no file
 
@@ -35,7 +35,7 @@
 
 - [ ] 6.1 Add the root hints file to the repository, record its source and date, and install it at `/usr/share/hickory-filter/root.hints` through the melange source directory; verify the image smoke test finds the file and that the image starts in recursive mode in the restricted container with `/health` 200
 - [ ] 6.2 Extend the chart's values schema with `mode` and `recursion`, keep forward as the default, and make sure an enabled NetworkPolicy renders no egress rules; verify new golden renders for recursive values and for the NetworkPolicy in recursive mode, and `hack/chart-test.sh` passes
-- [ ] 6.3 Write the README section for recursive mode: what it is for, the defaults, the egress it needs (UDP and TCP 53, TCP 853), that opportunistic encryption is unauthenticated and covers passive observers and TLS-accepting servers only, the trust anchor caveat, that the listener is as open as in forward mode, and private egress as guidance for network privacy; verify a test that the README states the unauthenticated, passive-only and TLS-accepting-servers-only limits, and the policy check passes
+- [ ] 6.3 Write the README section for recursive mode: what it is for, the defaults, the egress it needs (UDP and TCP 53, TCP 853), that opportunistic encryption is unauthenticated and covers passive observers and TLS-accepting servers only, the trust anchor caveat, that 0x20 case randomization isn't supported yet and is planned for when `hickory-server` applies it, that the listener is as open as in forward mode, and private egress as guidance for network privacy; verify a test that the README states the unauthenticated, passive-only and TLS-accepting-servers-only limits, and the policy check passes
 - [ ] 6.4 Check the dashboard against a running recursive-mode server (the live Prometheus, Loki and Grafana check used for the dashboard change) and decide whether any panel titles need to change; verify the panel queries return data and record the result in the PR
 - [ ] 6.5 Run recursive mode once against the real root servers where the network allows: resolve a handful of names, confirm validation and encryption behave, and record memory use and latency; verify and record the numbers in the PR, or record the reason it couldn't be run
 

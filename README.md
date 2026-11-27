@@ -170,6 +170,67 @@ Upstream and bootstrap resolvers are IP addresses, never host names:
 `tls://` requires the `#name`. Refresh intervals take units (`"6h"`, `"90m"`);
 `0` disables.
 
+## Recursive mode
+
+By default the server forwards every query it doesn't block to the `upstreams` you
+configure, so those resolvers' operators see every name your clients ask for. With
+`mode = "recursive"` it resolves names itself instead: from the root servers down to the
+authoritative servers, asking no third-party resolver. That is what it is for: privacy from
+resolver operators, and not depending on one. The two modes are exclusive and there is no
+fallback between them, so a broken network can never quietly send queries to a third party.
+
+```toml
+mode = "recursive"
+```
+
+Recursive mode takes no `upstreams`, starts from the root hints in the file `recursion.roots`
+(the image ships one), and keeps everything else the same: blocking, allow rules, lists,
+metrics and the query log work as before. Unblocked queries that can't be resolved get
+SERVFAIL, and `/ready` answers 503 until a root server has answered, so a network that blocks
+DNS shows up as a server that never becomes ready.
+
+What is on by default, and what each of it does and doesn't give:
+
+- **DNSSEC validation** against the built-in root trust anchor. An answer from a signed zone
+  whose signatures don't check out becomes SERVFAIL, so a forged answer for a signed zone
+  can't reach a client. Answers from unsigned zones are returned as they are. Set
+  `recursion.dnssec` to `"off"`, or to the path of a file of trust anchors to use instead.
+  The built-in anchor is fixed: when the root key is replaced, validation fails until the
+  library is updated, and `"off"` or an anchor file is the way around that in the meantime.
+  Answers rejected by validation are not counted separately in the metrics (they show as
+  `upstream_error`), so to tell a validation failure from a network failure, ask the name with
+  validation off.
+- **QNAME minimization**: each name server is sent only as much of the name as it needs, so the
+  root servers see the top-level domain and a top-level domain's servers see the registered
+  name, not the full name. `recursion.qname_minimization = "relaxed"` keeps going after a name
+  error.
+- **Opportunistic encryption**: name servers are probed for DNS-over-TLS and used over it when
+  they accept it. It is **unauthenticated**: the server's certificate is not verified, so it
+  protects against **passive** observers only, not against someone who can intercept or block
+  the connection, and it applies only for name servers that accept TLS; the rest are asked in
+  the clear. It is not the verified DNS-over-TLS that `tls://` upstreams give in forward mode.
+  Few name servers accept TLS today (none of the ones contacted while resolving ten popular names did when this was measured), so expect most queries to stay plain. Turn it off with `recursion.opportunistic_encryption = false`. The `tls` value of the
+  `protocol` label on the upstream metrics shows how much of your traffic actually went
+  encrypted. With `recursion.state_file` it remembers which servers accept TLS across restarts
+  (saved every `recursion.state_save_interval`); it writes nothing without it.
+
+What it needs and what it leaves open:
+
+- **Network**: outbound UDP and TCP port 53 (and TCP port 853 for the TLS probes) to arbitrary
+  hosts. Some networks block or intercept port 53; there the server stays not ready.
+- **Network observers**: with plain port 53 to authoritative servers, an observer on the path
+  sees the queries. Opportunistic encryption only helps for servers that accept TLS. For
+  stronger privacy on the network path, run the server behind private egress (a VPN you
+  control, for example); that is a deployment choice, not something this server does.
+- **Who can ask**: the listener is as open as in forward mode, and a recursive resolver reachable
+  from the internet can be used to amplify attacks. Bind it to the networks you serve.
+- **Not yet supported: 0x20 case randomization.** Randomizing the case of query names over UDP
+  (and rejecting answers that don't repeat it) makes forged answers harder to land. The
+  library this server is built on doesn't apply it in its recursive resolver yet, so there is
+  no setting for it. It will be added once the library supports it.
+- **Name servers**: private, loopback and other non-routable addresses are never asked, even
+  when a delegation names one.
+
 ## Metrics and logs
 
 An HTTP endpoint serves `/health`, `/ready` and `/metrics` on the address in
@@ -268,8 +329,11 @@ hand, or provisioned from a ConfigMap or an operator resource.
   (`hickory_filter_queries_total`), answer-time quantiles
   (`hickory_filter_query_duration_seconds`), queries by type, upstream queries
   and responses (`hickory_resolver_outgoing_queries_total`,
-  `hickory_resolver_name_server_query_responses_total`), the response cache hit
-  ratio (`hickory_resolver_cache_hit_total`, `hickory_resolver_cache_miss_total`),
+  `hickory_resolver_name_server_query_responses_total`; in recursive mode these
+  count the name servers contacted, and the protocol shows how much was
+  encrypted), the response cache hit ratio (`hickory_resolver_cache_hit_total`,
+  `hickory_resolver_cache_miss_total`, and in recursive mode
+  `hickory_recursor_cache_hit_total`, `hickory_recursor_cache_miss_total`),
   rules by action and kind (`hickory_filter_rules`), and a table of lists with
   each list's rules, skipped lines, time since its last successful load and last
   refresh result (`hickory_filter_list_rules`, `hickory_filter_list_skipped_lines`,

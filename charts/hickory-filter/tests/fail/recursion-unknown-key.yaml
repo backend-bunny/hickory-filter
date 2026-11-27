@@ -1,0 +1,2 @@
+# expect: additional properties
+config: {mode: recursive, recursion: {case_randomization: true}}

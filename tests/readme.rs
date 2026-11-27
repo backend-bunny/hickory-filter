@@ -309,3 +309,41 @@ fn the_quick_start_commands_use_options_that_exist() {
         assert!(help.contains(option), "the binary's help mentions {option}");
     }
 }
+
+/// The README's section on recursive mode says what its encryption does and
+/// doesn't give, and what isn't supported yet.
+#[test]
+fn the_recursive_mode_section_states_its_limits() {
+    let text = common::readme();
+    let start = text
+        .find("\n## Recursive mode\n")
+        .expect("a section on recursive mode");
+    let rest = &text[start + 1..];
+    let end = rest[3..].find("\n## ").map_or(rest.len(), |i| i + 3);
+    let section = rest[..end].replace('\n', " ").to_lowercase();
+    for (needle, why) in [
+        ("unauthenticated", "the encryption is not authenticated"),
+        ("passive", "it protects against passive observers only"),
+        (
+            "accept tls",
+            "it applies only to name servers that accept TLS",
+        ),
+        ("0x20", "case randomization is not supported yet"),
+        (
+            "once the library supports it",
+            "and is planned for when the library supports it",
+        ),
+        (
+            "as open as in forward mode",
+            "the listener is as open as in forward mode",
+        ),
+        ("udp and tcp port 53", "the egress it needs"),
+        ("port 853", "the egress for TLS probes"),
+        ("trust anchor", "the trust anchor caveat"),
+    ] {
+        assert!(
+            section.contains(needle),
+            "the section on recursive mode lacks {needle:?}: {why}"
+        );
+    }
+}

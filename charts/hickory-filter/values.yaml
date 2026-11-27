@@ -26,6 +26,14 @@ podAnnotations: {}
 # The hickory-filter configuration, rendered as TOML into a ConfigMap. Keys are
 # those of the configuration file (see the example configuration). The server
 # listens on port 1053 in the container; keep `listen` unset or on that port.
+#
+# Recursive mode (resolve from the root servers instead of forwarding): set
+# `mode: recursive`. The chart then leaves `upstreams` out of the rendered
+# configuration, so the defaults below don't need to be cleared. It needs the
+# pods to reach arbitrary hosts on UDP and TCP port 53 and TCP port 853 (no
+# egress is restricted by this chart), and is ready only once a root server
+# answers. To keep what it learned about TLS support across restarts, set
+# `recursion.state_file` to a path under `cache.mountPath` and enable `cache`.
 config:
   upstreams:
     - 1.1.1.1

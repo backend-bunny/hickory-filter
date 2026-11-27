@@ -32,6 +32,18 @@
         "upstreams": {"type": "array", "items": {"type": "string"}},
         "cache_size": {"type": "integer", "minimum": 0},
         "http": {"type": ["string", "boolean"]},
+        "mode": {"enum": ["forward", "recursive"]},
+        "recursion": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "roots": {"type": "string", "minLength": 1},
+            "dnssec": {"type": "string", "minLength": 1},
+            "qname_minimization": {"enum": ["strict", "relaxed"]},
+            "opportunistic_encryption": {"type": "boolean"},
+            "state_file": {"type": "string", "minLength": 1},
+            "state_save_interval": {"type": ["string", "integer"]}
+          }
+        },
         "log": {
           "type": "object", "additionalProperties": false,
           "properties": {

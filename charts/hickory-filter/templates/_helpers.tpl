@@ -60,6 +60,10 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/* The rendered configuration, with the cache directory filled in. */}}
 {{- define "hickory-filter.config" -}}
 {{- $cfg := deepCopy .Values.config -}}
+{{- /* Recursive mode takes no upstreams; the default values carry some for forward mode. */ -}}
+{{- if eq (toString (get $cfg "mode")) "recursive" }}
+{{- $_ := unset $cfg "upstreams" }}
+{{- end }}
 {{- if .Values.cache.enabled }}
 {{- $filter := default (dict) (get $cfg "filter") }}
 {{- $_ := set $filter "cache_dir" .Values.cache.mountPath }}

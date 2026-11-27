@@ -1,0 +1,185 @@
+---
+# Source: hickory-filter/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rel-hickory-filter
+  labels:
+    helm.sh/chart: hickory-filter-VERSION
+    app.kubernetes.io/name: hickory-filter
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "VERSION"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hickory-filter
+      app.kubernetes.io/instance: rel
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - {port: 1053, protocol: UDP}
+        - {port: 1053, protocol: TCP}
+    - ports:
+        - {port: 8080, protocol: TCP}
+
+---
+# Source: hickory-filter/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rel-hickory-filter
+  labels:
+    helm.sh/chart: hickory-filter-VERSION
+    app.kubernetes.io/name: hickory-filter
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "VERSION"
+    app.kubernetes.io/managed-by: Helm
+automountServiceAccountToken: false
+
+---
+# Source: hickory-filter/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rel-hickory-filter
+  labels:
+    helm.sh/chart: hickory-filter-VERSION
+    app.kubernetes.io/name: hickory-filter
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "VERSION"
+    app.kubernetes.io/managed-by: Helm
+data:
+  config.toml: |
+    http = "0.0.0.0:8080"
+    mode = "recursive"
+    
+    [filter]
+      cache_dir = "/var/cache/hickory-filter"
+    
+    [log]
+      format = "json"
+    
+    [recursion]
+      dnssec = "validate"
+      opportunistic_encryption = true
+      qname_minimization = "relaxed"
+      state_file = "/var/cache/hickory-filter/tls-state.toml"
+    
+
+---
+# Source: hickory-filter/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: rel-hickory-filter
+  labels:
+    helm.sh/chart: hickory-filter-VERSION
+    app.kubernetes.io/name: hickory-filter
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "VERSION"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: hickory-filter
+    app.kubernetes.io/instance: rel
+  ports:
+    - name: dns-udp
+      port: 53
+      targetPort: dns-udp
+      protocol: UDP
+    - name: dns-tcp
+      port: 53
+      targetPort: dns-tcp
+      protocol: TCP
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+
+---
+# Source: hickory-filter/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rel-hickory-filter
+  labels:
+    helm.sh/chart: hickory-filter-VERSION
+    app.kubernetes.io/name: hickory-filter
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "VERSION"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hickory-filter
+      app.kubernetes.io/instance: rel
+  template:
+    metadata:
+      annotations:
+        checksum/config: 5c3b7eb236fa63e598315f288ea571909f4260a76f1874d898beb545b495b6d8
+      labels:
+        helm.sh/chart: hickory-filter-VERSION
+        app.kubernetes.io/name: hickory-filter
+        app.kubernetes.io/instance: rel
+        app.kubernetes.io/version: "VERSION"
+        app.kubernetes.io/managed-by: Helm
+    spec:
+      serviceAccountName: rel-hickory-filter
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: hickory-filter
+          image: "ghcr.io/backend-bunny/hickory-filter:VERSION"
+          imagePullPolicy: IfNotPresent
+          args: ["--config", "/etc/hickory-filter/config.toml"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: dns-udp
+              containerPort: 1053
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: 1053
+              protocol: TCP
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+          volumeMounts:
+            - name: config
+              mountPath: /etc/hickory-filter
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /var/cache/hickory-filter
+      volumes:
+        - name: config
+          configMap:
+            name: rel-hickory-filter
+            items:
+              - key: config.toml
+                path: config.toml
+        - name: tmp
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}

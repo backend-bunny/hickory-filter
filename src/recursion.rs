@@ -200,6 +200,21 @@ mod tests {
         assert!(addresses.contains(&"198.18.0.10".parse().unwrap()));
     }
 
+    /// The hints the image ships (see `melange.yaml`) list every root server
+    /// over both address families, and our loader accepts them.
+    #[test]
+    fn the_shipped_root_hints_are_valid() {
+        let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("data/root.hints");
+        let addresses = read_root_hints(&file).expect("the shipped hints parse");
+        assert_eq!(addresses.iter().filter(|a| a.is_ipv4()).count(), 13);
+        assert_eq!(addresses.iter().filter(|a| a.is_ipv6()).count(), 13);
+        assert!(
+            addresses
+                .iter()
+                .all(|a| !a.is_loopback() && !a.is_unspecified())
+        );
+    }
+
     #[test]
     fn a_missing_hints_file_names_the_file() {
         let error = read_root_hints(Path::new("/nonexistent/root.hints")).unwrap_err();

@@ -44,6 +44,16 @@ for want in 'runAsNonRoot: true' 'runAsUser: 65532' 'runAsGroup: 65532' 'allowPr
 done
 ! grep -qE 'privileged|hostNetwork|hostPort|hostPath|add:' <<<"$def" || { echo "default render has a restricted-profile violation" >&2; fail=1; }
 
+echo "== forward is the default; recursive mode renders no upstreams and no egress rules"
+base="$(helm template rel "$CHART")"
+grep -q '^    upstreams = ' <<<"$base" || { echo "the default render has no upstreams" >&2; fail=1; }
+! grep -q 'mode = "recursive"' <<<"$base" || { echo "the default render is recursive" >&2; fail=1; }
+rec="$(helm template rel "$CHART" -f "$T/cases/recursive-all-on.yaml")"
+grep -q 'mode = "recursive"' <<<"$rec" || { echo "the recursive render lacks the mode" >&2; fail=1; }
+! grep -q 'upstreams' <<<"$rec" || { echo "the recursive render still has upstreams" >&2; fail=1; }
+! grep -qi 'egress' <<<"$rec" || { echo "the NetworkPolicy restricts egress in recursive mode" >&2; fail=1; }
+grep -q 'policyTypes: \[Ingress\]' <<<"$rec" || { echo "the recursive render has no NetworkPolicy" >&2; fail=1; }
+
 echo "== README values exist in values.schema.json"
 python3 - "$CHART" <<'PY' || fail=1
 import json, re, sys

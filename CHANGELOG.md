@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/backend-bunny/hickory-filter/compare/v0.3.0...v0.4.0) (2026-11-28)
+
+
+### Features
+
+* **chart:** show the dashboard rankings as tables and make its log selector configurable ([#61](https://github.com/backend-bunny/hickory-filter/issues/61)) ([53e66e7](https://github.com/backend-bunny/hickory-filter/commit/53e66e7470a9f0c796d1a90abd18edd18048c6d3))
+
 ## [0.3.0](https://github.com/backend-bunny/hickory-filter/compare/v0.2.0...v0.3.0) (2026-11-27)
 
 

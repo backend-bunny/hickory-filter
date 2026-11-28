@@ -66,6 +66,7 @@ through a checksum annotation. `existingConfigMap` uses a ConfigMap you manage i
 | `scrapeAnnotations.enabled` | `false` | `prometheus.io/*` pod annotations, port from `config.http` |
 | `serviceMonitor.enabled` | `false` | Prometheus Operator ServiceMonitor |
 | `podMonitor.enabled` | `false` | Prometheus Operator PodMonitor |
+| `dashboard.logSelector` | `""` | Default Loki stream selector of the dashboard's usage panels; empty keeps `{app_kubernetes_io_name="hickory-filter"}` |
 | `grafanaDashboard.enabled` | `false` | `GrafanaDashboard` for the Grafana operator |
 | `grafanaDashboard.instanceSelector` | `{}` | Required when enabled |
 | `dashboardConfigMap.enabled` | `false` | Dashboard ConfigMap for the Grafana sidecar |
@@ -177,3 +178,13 @@ dashboardConfigMap:
 ```
 
 The usage panels need the query log: set `config.log.query_log: true`.
+
+The usage panels find the server's log lines through the dashboard's **Log stream
+selector**, by default `{app_kubernetes_io_name="hickory-filter"}`. Log collectors
+label container streams differently; if yours indexes them by another label, set the
+default that matches (it applies to both dashboard resources):
+
+```yaml
+dashboard:
+  logSelector: '{service_name="hickory-filter"}'
+```

@@ -129,6 +129,12 @@
     },
     "serviceMonitor": {"$ref": "#/definitions/monitor"},
     "podMonitor": {"$ref": "#/definitions/monitor"},
+    "dashboard": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "logSelector": {"type": "string"}
+      }
+    },
     "grafanaDashboard": {
       "type": "object", "additionalProperties": false,
       "properties": {

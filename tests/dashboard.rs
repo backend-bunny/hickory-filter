@@ -333,6 +333,52 @@ fn the_usage_section_says_it_needs_the_query_log() {
 }
 
 #[test]
+fn the_usage_rankings_are_tables_of_each_name_or_client_with_its_count() {
+    let dashboard = load();
+    let panels = dashboard["panels"].as_array().expect("panels");
+    for (title, label, column) in [
+        ("Top blocked names", "name", "Name"),
+        ("Top permitted names", "name", "Name"),
+        ("Top clients", "client", "Client"),
+    ] {
+        let panel = panels
+            .iter()
+            .find(|p| p["title"] == title)
+            .unwrap_or_else(|| panic!("no panel {title}"));
+        assert_eq!(panel["type"], "table", "{title} is not a table");
+        let steps = panel["transformations"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{title} has no transformations"));
+        // The panel receives the instant query as one table (Time, label,
+        // Value #A): a reduce step would collapse its rows into one.
+        assert!(
+            steps.iter().all(|t| t["id"] != "reduce"),
+            "{title} reduces its rows"
+        );
+        let organize = steps
+            .iter()
+            .find(|t| t["id"] == "organize")
+            .unwrap_or_else(|| panic!("{title} has no organize step"));
+        let options = &organize["options"];
+        assert_eq!(options["excludeByName"]["Time"], true, "{title} shows Time");
+        assert_eq!(options["renameByName"][label], column, "{title} column");
+        assert_eq!(
+            options["renameByName"]["Value #A"], "Queries",
+            "{title} count"
+        );
+        let sort = steps
+            .iter()
+            .find(|t| t["id"] == "sortBy")
+            .unwrap_or_else(|| panic!("{title} is not sorted"));
+        assert_eq!(
+            sort["options"]["sort"][0]["field"], "Queries",
+            "{title} sort"
+        );
+        assert_eq!(sort["options"]["sort"][0]["desc"], true, "{title} order");
+    }
+}
+
+#[test]
 fn the_list_table_shows_rules_skipped_lines_age_and_last_result() {
     let dashboard = load();
     let table = dashboard["panels"]

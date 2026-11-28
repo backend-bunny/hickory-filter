@@ -927,7 +927,7 @@ data:
         },
         {
           "id": 16,
-          "type": "bargauge",
+          "type": "table",
           "title": "Top blocked names",
           "description": "The most requested names that were blocked, over the selected time range.",
           "datasource": {
@@ -935,7 +935,7 @@ data:
             "uid": "${ds_loki}"
           },
           "gridPos": {
-            "h": 8,
+            "h": 12,
             "w": 8,
             "x": 0,
             "y": 41
@@ -954,26 +954,70 @@ data:
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "short"
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Queries"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "gradient",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "name": "Name",
+                  "Value #A": "Queries"
+                }
+              }
             },
-            "orientation": "horizontal",
-            "displayMode": "gradient",
-            "showUnfilled": true
-          }
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Queries",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
         },
         {
           "id": 17,
-          "type": "bargauge",
+          "type": "table",
           "title": "Top permitted names",
           "description": "The most requested names that were forwarded.",
           "datasource": {
@@ -981,7 +1025,7 @@ data:
             "uid": "${ds_loki}"
           },
           "gridPos": {
-            "h": 8,
+            "h": 12,
             "w": 8,
             "x": 8,
             "y": 41
@@ -1000,26 +1044,70 @@ data:
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "short"
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Queries"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "gradient",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "name": "Name",
+                  "Value #A": "Queries"
+                }
+              }
             },
-            "orientation": "horizontal",
-            "displayMode": "gradient",
-            "showUnfilled": true
-          }
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Queries",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
         },
         {
           "id": 18,
-          "type": "bargauge",
+          "type": "table",
           "title": "Top clients",
           "description": "The clients that sent the most queries.",
           "datasource": {
@@ -1027,7 +1115,7 @@ data:
             "uid": "${ds_loki}"
           },
           "gridPos": {
-            "h": 8,
+            "h": 12,
             "w": 8,
             "x": 16,
             "y": 41
@@ -1046,22 +1134,66 @@ data:
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "short"
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Queries"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "gradient",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "client": "Client",
+                  "Value #A": "Queries"
+                }
+              }
             },
-            "orientation": "horizontal",
-            "displayMode": "gradient",
-            "showUnfilled": true
-          }
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Queries",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
         },
         {
           "id": 19,
@@ -1076,7 +1208,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 49
+            "y": 53
           },
           "targets": [
             {
@@ -2089,7 +2221,7 @@ spec:
         },
         {
           "id": 16,
-          "type": "bargauge",
+          "type": "table",
           "title": "Top blocked names",
           "description": "The most requested names that were blocked, over the selected time range.",
           "datasource": {
@@ -2097,7 +2229,7 @@ spec:
             "uid": "${ds_loki}"
           },
           "gridPos": {
-            "h": 8,
+            "h": 12,
             "w": 8,
             "x": 0,
             "y": 41
@@ -2116,26 +2248,70 @@ spec:
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "short"
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Queries"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "gradient",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "name": "Name",
+                  "Value #A": "Queries"
+                }
+              }
             },
-            "orientation": "horizontal",
-            "displayMode": "gradient",
-            "showUnfilled": true
-          }
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Queries",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
         },
         {
           "id": 17,
-          "type": "bargauge",
+          "type": "table",
           "title": "Top permitted names",
           "description": "The most requested names that were forwarded.",
           "datasource": {
@@ -2143,7 +2319,7 @@ spec:
             "uid": "${ds_loki}"
           },
           "gridPos": {
-            "h": 8,
+            "h": 12,
             "w": 8,
             "x": 8,
             "y": 41
@@ -2162,26 +2338,70 @@ spec:
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "short"
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Queries"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "gradient",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "name": "Name",
+                  "Value #A": "Queries"
+                }
+              }
             },
-            "orientation": "horizontal",
-            "displayMode": "gradient",
-            "showUnfilled": true
-          }
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Queries",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
         },
         {
           "id": 18,
-          "type": "bargauge",
+          "type": "table",
           "title": "Top clients",
           "description": "The clients that sent the most queries.",
           "datasource": {
@@ -2189,7 +2409,7 @@ spec:
             "uid": "${ds_loki}"
           },
           "gridPos": {
-            "h": 8,
+            "h": 12,
             "w": 8,
             "x": 16,
             "y": 41
@@ -2208,22 +2428,66 @@ spec:
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "short"
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Queries"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "gradient",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "client": "Client",
+                  "Value #A": "Queries"
+                }
+              }
             },
-            "orientation": "horizontal",
-            "displayMode": "gradient",
-            "showUnfilled": true
-          }
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Queries",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
         },
         {
           "id": 19,
@@ -2238,7 +2502,7 @@ spec:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 49
+            "y": 53
           },
           "targets": [
             {

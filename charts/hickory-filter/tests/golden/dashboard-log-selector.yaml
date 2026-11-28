@@ -1,0 +1,2465 @@
+---
+# Source: hickory-filter/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rel-hickory-filter
+  labels:
+    helm.sh/chart: hickory-filter-VERSION
+    app.kubernetes.io/name: hickory-filter
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "VERSION"
+    app.kubernetes.io/managed-by: Helm
+automountServiceAccountToken: false
+
+---
+# Source: hickory-filter/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rel-hickory-filter
+  labels:
+    helm.sh/chart: hickory-filter-VERSION
+    app.kubernetes.io/name: hickory-filter
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "VERSION"
+    app.kubernetes.io/managed-by: Helm
+data:
+  config.toml: |
+    http = "0.0.0.0:8080"
+    upstreams = ["1.1.1.1", "9.9.9.9"]
+    
+    [log]
+      format = "json"
+    
+
+---
+# Source: hickory-filter/templates/dashboard-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rel-hickory-filter-dashboard
+  namespace: ns
+  labels:
+    helm.sh/chart: hickory-filter-VERSION
+    app.kubernetes.io/name: hickory-filter
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "VERSION"
+    app.kubernetes.io/managed-by: Helm
+    grafana_dashboard: "1"
+data:
+  hickory-filter.json: |
+    {
+      "uid": "hickory-filter",
+      "title": "hickory-filter",
+      "description": "Queries, blocking, upstreams, lists and, from the query log, the busiest clients and names.",
+      "tags": [
+        "dns",
+        "hickory-filter"
+      ],
+      "schemaVersion": 39,
+      "version": 1,
+      "editable": true,
+      "graphTooltip": 1,
+      "refresh": "1m",
+      "time": {
+        "from": "now-24h",
+        "to": "now"
+      },
+      "timepicker": {},
+      "annotations": {
+        "list": []
+      },
+      "links": [],
+      "templating": {
+        "list": [
+          {
+            "name": "ds_prometheus",
+            "label": "Metrics",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {},
+            "hide": 0,
+            "refresh": 1,
+            "regex": "",
+            "options": [],
+            "multi": false,
+            "includeAll": false
+          },
+          {
+            "name": "ds_loki",
+            "label": "Logs",
+            "type": "datasource",
+            "query": "loki",
+            "current": {},
+            "hide": 0,
+            "refresh": 1,
+            "regex": "",
+            "options": [],
+            "multi": false,
+            "includeAll": false
+          },
+          {
+            "name": "instance",
+            "label": "Instance",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${ds_prometheus}"
+            },
+            "query": {
+              "query": "label_values(hickory_filter_queries_total, instance)",
+              "refId": "instance"
+            },
+            "definition": "label_values(hickory_filter_queries_total, instance)",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": true,
+            "allValue": ".*",
+            "current": {
+              "selected": true,
+              "text": "All",
+              "value": "$__all"
+            },
+            "hide": 0,
+            "sort": 1,
+            "regex": "",
+            "options": []
+          },
+          {
+            "name": "log_selector",
+            "label": "Log stream selector",
+            "type": "textbox",
+            "query": "{service_name=\"hickory-filter\", k8s_container_name=\"hickory-filter\"}",
+            "current": {
+              "selected": false,
+              "text": "{service_name=\"hickory-filter\", k8s_container_name=\"hickory-filter\"}",
+              "value": "{service_name=\"hickory-filter\", k8s_container_name=\"hickory-filter\"}"
+            },
+            "hide": 0,
+            "options": [
+              {
+                "selected": true,
+                "text": "{service_name=\"hickory-filter\", k8s_container_name=\"hickory-filter\"}",
+                "value": "{service_name=\"hickory-filter\", k8s_container_name=\"hickory-filter\"}"
+              }
+            ]
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "row",
+          "title": "Overview",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "panels": []
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Queries",
+          "description": "Queries answered over the selected time range.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 1
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "sum(increase(hickory_filter_queries_total{instance=~\"$instance\"}[$__range]))",
+              "refId": "A",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Blocked",
+          "description": "Share of queries answered with a blocked response.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 1
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "100 * sum(increase(hickory_filter_queries_total{outcome=\"blocked\",instance=~\"$instance\"}[$__range])) / sum(increase(hickory_filter_queries_total{instance=~\"$instance\"}[$__range]))",
+              "refId": "A",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Rules loaded",
+          "description": "Rules in the live rule set, allow and block.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 1
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "max(sum by (instance) (hickory_filter_rules{instance=~\"$instance\"}))",
+              "refId": "A",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "Rule set age",
+          "description": "Time since the rule set was last replaced (the first rule set at startup counts).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 1
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "time() - max(hickory_filter_ruleset_last_swap_timestamp_seconds{instance=~\"$instance\"})",
+              "refId": "A",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "Queries per second by outcome",
+          "description": "allowed: an allow rule matched. blocked. passed: no rule matched. upstream_error: no upstream answered.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 5
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "sum by (outcome) (rate(hickory_filter_queries_total{instance=~\"$instance\"}[$__rate_interval]))",
+              "refId": "A",
+              "legendFormat": "{{outcome}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                },
+                "fillOpacity": 30
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "Answer time",
+          "description": "Time taken to answer a query, as quantiles of the histogram over all outcomes.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 5
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(hickory_filter_query_duration_seconds_bucket{instance=~\"$instance\"}[$__rate_interval])))",
+              "refId": "A",
+              "legendFormat": "p50",
+              "range": true
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(hickory_filter_query_duration_seconds_bucket{instance=~\"$instance\"}[$__rate_interval])))",
+              "refId": "B",
+              "legendFormat": "p90",
+              "range": true
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(hickory_filter_query_duration_seconds_bucket{instance=~\"$instance\"}[$__rate_interval])))",
+              "refId": "C",
+              "legendFormat": "p99",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 8,
+          "type": "bargauge",
+          "title": "Queries by type",
+          "description": "Over the selected time range. Types outside a fixed common set are counted as other.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 13
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "sum by (type) (increase(hickory_filter_queries_total{instance=~\"$instance\"}[$__range]))",
+              "refId": "A",
+              "legendFormat": "{{type}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true
+          }
+        },
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "Upstream queries by protocol",
+          "description": "Queries sent to the upstream resolvers, or to the name servers contacted in recursive mode. `tls` is encrypted, `udp` and `tcp` are plain.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 13
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "sum by (protocol) (rate(hickory_resolver_outgoing_queries_total{instance=~\"$instance\"}[$__rate_interval]))",
+              "refId": "A",
+              "legendFormat": "{{protocol}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 10,
+          "type": "timeseries",
+          "title": "Upstream responses by status",
+          "description": "Success, timeout and failure responses, aggregated over the upstreams (the name servers in recursive mode).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 13
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "sum by (status) (rate(hickory_resolver_name_server_query_responses_total{instance=~\"$instance\"}[$__rate_interval]))",
+              "refId": "A",
+              "legendFormat": "{{status}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 11,
+          "type": "stat",
+          "title": "Cache hit ratio",
+          "description": "Share of queries answered from the response cache: the forwarder's cache in forward mode, the recursor's in recursive mode.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 21
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "((sum(increase(hickory_resolver_cache_hit_total{instance=~\"$instance\"}[$__range])) or vector(0)) + (sum(increase(hickory_recursor_cache_hit_total{instance=~\"$instance\"}[$__range])) or vector(0))) / (((sum(increase(hickory_resolver_cache_hit_total{instance=~\"$instance\"}[$__range])) or vector(0)) + (sum(increase(hickory_recursor_cache_hit_total{instance=~\"$instance\"}[$__range])) or vector(0))) + ((sum(increase(hickory_resolver_cache_miss_total{instance=~\"$instance\"}[$__range])) or vector(0)) + (sum(increase(hickory_recursor_cache_miss_total{instance=~\"$instance\"}[$__range])) or vector(0))))",
+              "refId": "A",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 12,
+          "type": "timeseries",
+          "title": "Rules by action and kind",
+          "description": "Rules in the live rule set.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 18,
+            "x": 6,
+            "y": 21
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "max by (action, kind) (hickory_filter_rules{instance=~\"$instance\"})",
+              "refId": "A",
+              "legendFormat": "{{action}} {{kind}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 13,
+          "type": "table",
+          "title": "Lists",
+          "description": "Each list's rules, skipped lines, time since its last successful load, and whether its last refresh worked. A failed refresh keeps the last good rules.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 29
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "max by (action, type, url) (hickory_filter_list_rules{instance=~\"$instance\"})",
+              "refId": "A",
+              "legendFormat": "",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "max by (action, type, url) (hickory_filter_list_skipped_lines{instance=~\"$instance\"})",
+              "refId": "B",
+              "legendFormat": "",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "time() - max by (action, type, url) (hickory_filter_list_last_success_timestamp_seconds{instance=~\"$instance\"})",
+              "refId": "C",
+              "legendFormat": "",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "min by (action, type, url) (hickory_filter_list_last_refresh_success{instance=~\"$instance\"})",
+              "refId": "D",
+              "legendFormat": "",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Last success"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Last refresh"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "0": {
+                            "text": "failed",
+                            "color": "red",
+                            "index": 0
+                          },
+                          "1": {
+                            "text": "ok",
+                            "color": "green",
+                            "index": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm"
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "url": "List",
+                  "action": "Action",
+                  "type": "Type",
+                  "Value #A": "Rules",
+                  "Value #B": "Skipped lines",
+                  "Value #C": "Last success",
+                  "Value #D": "Last refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "type": "row",
+          "title": "Usage (needs the query log)",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 37
+          },
+          "panels": []
+        },
+        {
+          "id": 15,
+          "type": "text",
+          "title": "About these panels",
+          "description": "",
+          "gridPos": {
+            "h": 3,
+            "w": 24,
+            "x": 0,
+            "y": 38
+          },
+          "targets": [],
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "These panels read the **query log** from Loki. They stay empty unless the server runs with `log.query_log = true` (and `format = \"json\"`) and its logs are collected into Loki. Set the **Log stream selector** variable to the labels that identify hickory-filter's log lines."
+          }
+        },
+        {
+          "id": 16,
+          "type": "table",
+          "title": "Top blocked names",
+          "description": "The most requested names that were blocked, over the selected time range.",
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds_loki}"
+          },
+          "gridPos": {
+            "h": 12,
+            "w": 8,
+            "x": 0,
+            "y": 41
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "${ds_loki}"
+              },
+              "expr": "topk(10, sum by (name) (count_over_time(${log_selector} | json | target=\"hickory_filter::query\" | outcome=\"blocked\" [$__range])))",
+              "refId": "A",
+              "legendFormat": "{{name}}",
+              "queryType": "instant"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Queries"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "gradient",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "name": "Name",
+                  "Value #A": "Queries"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Queries",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": 17,
+          "type": "table",
+          "title": "Top permitted names",
+          "description": "The most requested names that were forwarded.",
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds_loki}"
+          },
+          "gridPos": {
+            "h": 12,
+            "w": 8,
+            "x": 8,
+            "y": 41
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "${ds_loki}"
+              },
+              "expr": "topk(10, sum by (name) (count_over_time(${log_selector} | json | target=\"hickory_filter::query\" | outcome=~\"allowed|passed\" [$__range])))",
+              "refId": "A",
+              "legendFormat": "{{name}}",
+              "queryType": "instant"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Queries"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "gradient",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "name": "Name",
+                  "Value #A": "Queries"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Queries",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": 18,
+          "type": "table",
+          "title": "Top clients",
+          "description": "The clients that sent the most queries.",
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds_loki}"
+          },
+          "gridPos": {
+            "h": 12,
+            "w": 8,
+            "x": 16,
+            "y": 41
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "${ds_loki}"
+              },
+              "expr": "topk(10, sum by (client) (count_over_time(${log_selector} | json | target=\"hickory_filter::query\" [$__range])))",
+              "refId": "A",
+              "legendFormat": "{{client}}",
+              "queryType": "instant"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Queries"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "gradient",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "client": "Client",
+                  "Value #A": "Queries"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Queries",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": 19,
+          "type": "timeseries",
+          "title": "Queries per client",
+          "description": "Query rate of the five busiest clients.",
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds_loki}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 53
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "${ds_loki}"
+              },
+              "expr": "topk(5, sum by (client) (rate(${log_selector} | json | target=\"hickory_filter::query\" [$__auto])))",
+              "refId": "A",
+              "legendFormat": "{{client}}",
+              "queryType": "range"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        }
+      ]
+    }
+    
+
+---
+# Source: hickory-filter/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: rel-hickory-filter
+  labels:
+    helm.sh/chart: hickory-filter-VERSION
+    app.kubernetes.io/name: hickory-filter
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "VERSION"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: hickory-filter
+    app.kubernetes.io/instance: rel
+  ports:
+    - name: dns-udp
+      port: 53
+      targetPort: dns-udp
+      protocol: UDP
+    - name: dns-tcp
+      port: 53
+      targetPort: dns-tcp
+      protocol: TCP
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+
+---
+# Source: hickory-filter/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rel-hickory-filter
+  labels:
+    helm.sh/chart: hickory-filter-VERSION
+    app.kubernetes.io/name: hickory-filter
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "VERSION"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hickory-filter
+      app.kubernetes.io/instance: rel
+  template:
+    metadata:
+      annotations:
+        checksum/config: 492be7e296ee785151ee1dd76c1a39a6e552b2849a21fdbc22da329657d07717
+      labels:
+        helm.sh/chart: hickory-filter-VERSION
+        app.kubernetes.io/name: hickory-filter
+        app.kubernetes.io/instance: rel
+        app.kubernetes.io/version: "VERSION"
+        app.kubernetes.io/managed-by: Helm
+    spec:
+      serviceAccountName: rel-hickory-filter
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: hickory-filter
+          image: "ghcr.io/backend-bunny/hickory-filter:VERSION"
+          imagePullPolicy: IfNotPresent
+          args: ["--config", "/etc/hickory-filter/config.toml"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: dns-udp
+              containerPort: 1053
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: 1053
+              protocol: TCP
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+          volumeMounts:
+            - name: config
+              mountPath: /etc/hickory-filter
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: rel-hickory-filter
+            items:
+              - key: config.toml
+                path: config.toml
+        - name: tmp
+          emptyDir: {}
+
+---
+# Source: hickory-filter/templates/grafanadashboard.yaml
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: rel-hickory-filter
+  labels:
+    helm.sh/chart: hickory-filter-VERSION
+    app.kubernetes.io/name: hickory-filter
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "VERSION"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  json: |
+    {
+      "uid": "hickory-filter",
+      "title": "hickory-filter",
+      "description": "Queries, blocking, upstreams, lists and, from the query log, the busiest clients and names.",
+      "tags": [
+        "dns",
+        "hickory-filter"
+      ],
+      "schemaVersion": 39,
+      "version": 1,
+      "editable": true,
+      "graphTooltip": 1,
+      "refresh": "1m",
+      "time": {
+        "from": "now-24h",
+        "to": "now"
+      },
+      "timepicker": {},
+      "annotations": {
+        "list": []
+      },
+      "links": [],
+      "templating": {
+        "list": [
+          {
+            "name": "ds_prometheus",
+            "label": "Metrics",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {},
+            "hide": 0,
+            "refresh": 1,
+            "regex": "",
+            "options": [],
+            "multi": false,
+            "includeAll": false
+          },
+          {
+            "name": "ds_loki",
+            "label": "Logs",
+            "type": "datasource",
+            "query": "loki",
+            "current": {},
+            "hide": 0,
+            "refresh": 1,
+            "regex": "",
+            "options": [],
+            "multi": false,
+            "includeAll": false
+          },
+          {
+            "name": "instance",
+            "label": "Instance",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${ds_prometheus}"
+            },
+            "query": {
+              "query": "label_values(hickory_filter_queries_total, instance)",
+              "refId": "instance"
+            },
+            "definition": "label_values(hickory_filter_queries_total, instance)",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": true,
+            "allValue": ".*",
+            "current": {
+              "selected": true,
+              "text": "All",
+              "value": "$__all"
+            },
+            "hide": 0,
+            "sort": 1,
+            "regex": "",
+            "options": []
+          },
+          {
+            "name": "log_selector",
+            "label": "Log stream selector",
+            "type": "textbox",
+            "query": "{service_name=\"hickory-filter\", k8s_container_name=\"hickory-filter\"}",
+            "current": {
+              "selected": false,
+              "text": "{service_name=\"hickory-filter\", k8s_container_name=\"hickory-filter\"}",
+              "value": "{service_name=\"hickory-filter\", k8s_container_name=\"hickory-filter\"}"
+            },
+            "hide": 0,
+            "options": [
+              {
+                "selected": true,
+                "text": "{service_name=\"hickory-filter\", k8s_container_name=\"hickory-filter\"}",
+                "value": "{service_name=\"hickory-filter\", k8s_container_name=\"hickory-filter\"}"
+              }
+            ]
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "row",
+          "title": "Overview",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "panels": []
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Queries",
+          "description": "Queries answered over the selected time range.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 1
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "sum(increase(hickory_filter_queries_total{instance=~\"$instance\"}[$__range]))",
+              "refId": "A",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Blocked",
+          "description": "Share of queries answered with a blocked response.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 1
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "100 * sum(increase(hickory_filter_queries_total{outcome=\"blocked\",instance=~\"$instance\"}[$__range])) / sum(increase(hickory_filter_queries_total{instance=~\"$instance\"}[$__range]))",
+              "refId": "A",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Rules loaded",
+          "description": "Rules in the live rule set, allow and block.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 1
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "max(sum by (instance) (hickory_filter_rules{instance=~\"$instance\"}))",
+              "refId": "A",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "Rule set age",
+          "description": "Time since the rule set was last replaced (the first rule set at startup counts).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 1
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "time() - max(hickory_filter_ruleset_last_swap_timestamp_seconds{instance=~\"$instance\"})",
+              "refId": "A",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "Queries per second by outcome",
+          "description": "allowed: an allow rule matched. blocked. passed: no rule matched. upstream_error: no upstream answered.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 5
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "sum by (outcome) (rate(hickory_filter_queries_total{instance=~\"$instance\"}[$__rate_interval]))",
+              "refId": "A",
+              "legendFormat": "{{outcome}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                },
+                "fillOpacity": 30
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "Answer time",
+          "description": "Time taken to answer a query, as quantiles of the histogram over all outcomes.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 5
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(hickory_filter_query_duration_seconds_bucket{instance=~\"$instance\"}[$__rate_interval])))",
+              "refId": "A",
+              "legendFormat": "p50",
+              "range": true
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(hickory_filter_query_duration_seconds_bucket{instance=~\"$instance\"}[$__rate_interval])))",
+              "refId": "B",
+              "legendFormat": "p90",
+              "range": true
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(hickory_filter_query_duration_seconds_bucket{instance=~\"$instance\"}[$__rate_interval])))",
+              "refId": "C",
+              "legendFormat": "p99",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 8,
+          "type": "bargauge",
+          "title": "Queries by type",
+          "description": "Over the selected time range. Types outside a fixed common set are counted as other.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 13
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "sum by (type) (increase(hickory_filter_queries_total{instance=~\"$instance\"}[$__range]))",
+              "refId": "A",
+              "legendFormat": "{{type}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true
+          }
+        },
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "Upstream queries by protocol",
+          "description": "Queries sent to the upstream resolvers, or to the name servers contacted in recursive mode. `tls` is encrypted, `udp` and `tcp` are plain.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 13
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "sum by (protocol) (rate(hickory_resolver_outgoing_queries_total{instance=~\"$instance\"}[$__rate_interval]))",
+              "refId": "A",
+              "legendFormat": "{{protocol}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 10,
+          "type": "timeseries",
+          "title": "Upstream responses by status",
+          "description": "Success, timeout and failure responses, aggregated over the upstreams (the name servers in recursive mode).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 13
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "sum by (status) (rate(hickory_resolver_name_server_query_responses_total{instance=~\"$instance\"}[$__rate_interval]))",
+              "refId": "A",
+              "legendFormat": "{{status}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 11,
+          "type": "stat",
+          "title": "Cache hit ratio",
+          "description": "Share of queries answered from the response cache: the forwarder's cache in forward mode, the recursor's in recursive mode.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 21
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "((sum(increase(hickory_resolver_cache_hit_total{instance=~\"$instance\"}[$__range])) or vector(0)) + (sum(increase(hickory_recursor_cache_hit_total{instance=~\"$instance\"}[$__range])) or vector(0))) / (((sum(increase(hickory_resolver_cache_hit_total{instance=~\"$instance\"}[$__range])) or vector(0)) + (sum(increase(hickory_recursor_cache_hit_total{instance=~\"$instance\"}[$__range])) or vector(0))) + ((sum(increase(hickory_resolver_cache_miss_total{instance=~\"$instance\"}[$__range])) or vector(0)) + (sum(increase(hickory_recursor_cache_miss_total{instance=~\"$instance\"}[$__range])) or vector(0))))",
+              "refId": "A",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 12,
+          "type": "timeseries",
+          "title": "Rules by action and kind",
+          "description": "Rules in the live rule set.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 18,
+            "x": 6,
+            "y": 21
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "max by (action, kind) (hickory_filter_rules{instance=~\"$instance\"})",
+              "refId": "A",
+              "legendFormat": "{{action}} {{kind}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 13,
+          "type": "table",
+          "title": "Lists",
+          "description": "Each list's rules, skipped lines, time since its last successful load, and whether its last refresh worked. A failed refresh keeps the last good rules.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 29
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "max by (action, type, url) (hickory_filter_list_rules{instance=~\"$instance\"})",
+              "refId": "A",
+              "legendFormat": "",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "max by (action, type, url) (hickory_filter_list_skipped_lines{instance=~\"$instance\"})",
+              "refId": "B",
+              "legendFormat": "",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "time() - max by (action, type, url) (hickory_filter_list_last_success_timestamp_seconds{instance=~\"$instance\"})",
+              "refId": "C",
+              "legendFormat": "",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ds_prometheus}"
+              },
+              "expr": "min by (action, type, url) (hickory_filter_list_last_refresh_success{instance=~\"$instance\"})",
+              "refId": "D",
+              "legendFormat": "",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Last success"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Last refresh"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "0": {
+                            "text": "failed",
+                            "color": "red",
+                            "index": 0
+                          },
+                          "1": {
+                            "text": "ok",
+                            "color": "green",
+                            "index": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm"
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "url": "List",
+                  "action": "Action",
+                  "type": "Type",
+                  "Value #A": "Rules",
+                  "Value #B": "Skipped lines",
+                  "Value #C": "Last success",
+                  "Value #D": "Last refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "type": "row",
+          "title": "Usage (needs the query log)",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 37
+          },
+          "panels": []
+        },
+        {
+          "id": 15,
+          "type": "text",
+          "title": "About these panels",
+          "description": "",
+          "gridPos": {
+            "h": 3,
+            "w": 24,
+            "x": 0,
+            "y": 38
+          },
+          "targets": [],
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "These panels read the **query log** from Loki. They stay empty unless the server runs with `log.query_log = true` (and `format = \"json\"`) and its logs are collected into Loki. Set the **Log stream selector** variable to the labels that identify hickory-filter's log lines."
+          }
+        },
+        {
+          "id": 16,
+          "type": "table",
+          "title": "Top blocked names",
+          "description": "The most requested names that were blocked, over the selected time range.",
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds_loki}"
+          },
+          "gridPos": {
+            "h": 12,
+            "w": 8,
+            "x": 0,
+            "y": 41
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "${ds_loki}"
+              },
+              "expr": "topk(10, sum by (name) (count_over_time(${log_selector} | json | target=\"hickory_filter::query\" | outcome=\"blocked\" [$__range])))",
+              "refId": "A",
+              "legendFormat": "{{name}}",
+              "queryType": "instant"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Queries"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "gradient",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "name": "Name",
+                  "Value #A": "Queries"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Queries",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": 17,
+          "type": "table",
+          "title": "Top permitted names",
+          "description": "The most requested names that were forwarded.",
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds_loki}"
+          },
+          "gridPos": {
+            "h": 12,
+            "w": 8,
+            "x": 8,
+            "y": 41
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "${ds_loki}"
+              },
+              "expr": "topk(10, sum by (name) (count_over_time(${log_selector} | json | target=\"hickory_filter::query\" | outcome=~\"allowed|passed\" [$__range])))",
+              "refId": "A",
+              "legendFormat": "{{name}}",
+              "queryType": "instant"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Queries"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "gradient",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "name": "Name",
+                  "Value #A": "Queries"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Queries",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": 18,
+          "type": "table",
+          "title": "Top clients",
+          "description": "The clients that sent the most queries.",
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds_loki}"
+          },
+          "gridPos": {
+            "h": 12,
+            "w": 8,
+            "x": 16,
+            "y": 41
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "${ds_loki}"
+              },
+              "expr": "topk(10, sum by (client) (count_over_time(${log_selector} | json | target=\"hickory_filter::query\" [$__range])))",
+              "refId": "A",
+              "legendFormat": "{{client}}",
+              "queryType": "instant"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Queries"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "gradient",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "client": "Client",
+                  "Value #A": "Queries"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Queries",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": 19,
+          "type": "timeseries",
+          "title": "Queries per client",
+          "description": "Query rate of the five busiest clients.",
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds_loki}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 53
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "${ds_loki}"
+              },
+              "expr": "topk(5, sum by (client) (rate(${log_selector} | json | target=\"hickory_filter::query\" [$__auto])))",
+              "refId": "A",
+              "legendFormat": "{{client}}",
+              "queryType": "range"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        }
+      ]
+    }

@@ -75,3 +75,19 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- define "hickory-filter.configName" -}}
 {{- default (include "hickory-filter.fullname" .) .Values.existingConfigMap }}
 {{- end }}
+
+{{/* The packaged dashboard JSON, with the log stream selector default replaced
+     when dashboard.logSelector is set. The packaged default appears only in the
+     dashboard's log selector variable; failing when it isn't found keeps a
+     dashboard edit from silently dropping the override. */}}
+{{- define "hickory-filter.dashboard" -}}
+{{- $json := .Files.Get "dashboards/hickory-filter.json" -}}
+{{- with .Values.dashboard.logSelector -}}
+{{- $packaged := `{app_kubernetes_io_name=\"hickory-filter\"}` -}}
+{{- if not (contains $packaged $json) -}}
+{{- fail "dashboard.logSelector: the packaged dashboard no longer has the default log selector to replace" -}}
+{{- end -}}
+{{- $json = replace $packaged (toJson . | trimPrefix "\"" | trimSuffix "\"") $json -}}
+{{- end -}}
+{{- $json -}}
+{{- end }}

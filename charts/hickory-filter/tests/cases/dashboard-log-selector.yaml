@@ -1,0 +1,4 @@
+grafanaDashboard: {enabled: true, instanceSelector: {matchLabels: {dashboards: grafana}}}
+dashboardConfigMap: {enabled: true}
+dashboard:
+  logSelector: '{service_name="hickory-filter", k8s_container_name="hickory-filter"}'

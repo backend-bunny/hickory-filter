@@ -4,7 +4,7 @@
 # directory, so compilation is offline and uses exactly Cargo.lock.
 package:
   name: hickory-filter
-  version: 0.3.0 # x-release-please-version
+  version: 0.4.0 # x-release-please-version
   epoch: 0
   description: A filtering DNS forwarder with allow/block rules and scheduled blocklist refresh.
   url: https://github.com/backend-bunny/hickory-filter

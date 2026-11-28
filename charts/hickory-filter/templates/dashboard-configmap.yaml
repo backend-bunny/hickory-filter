@@ -15,5 +15,5 @@ metadata:
   {{- end }}
 data:
   hickory-filter.json: |
-    {{- .Files.Get "dashboards/hickory-filter.json" | nindent 4 }}
+    {{- include "hickory-filter.dashboard" . | nindent 4 }}
 {{- end }}

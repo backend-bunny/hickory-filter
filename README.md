@@ -343,10 +343,13 @@ hand, or provisioned from a ConfigMap or an operator resource.
   `hickory_filter_list_last_success_timestamp_seconds`,
   `hickory_filter_list_last_refresh_success`).
 - **Usage**, from the query log in Loki: the most requested blocked names, the
-  most requested permitted names, the busiest clients and the query rate per
-  client. These stay empty unless `log.query_log = true` with `format = "json"`
+  most requested permitted names and the busiest clients, as tables ranking each
+  name or client with its query count, and the query rate per client. These
+  stay empty unless `log.query_log = true` with `format = "json"`
   and the logs are collected into Loki. The **Log stream selector** variable
-  holds the labels that identify hickory-filter's log lines. The queries select
+  holds the labels that identify hickory-filter's log lines; its default is
+`{app_kubernetes_io_name="hickory-filter"}`, and the chart's
+`dashboard.logSelector` value sets another. The queries select
   lines by the target `hickory_filter::query` and use only the documented
   fields.
 

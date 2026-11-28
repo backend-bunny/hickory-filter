@@ -112,6 +112,15 @@ podMonitor:
   relabelings: []
   metricRelabelings: []
 
+# The dashboard in dashboards/, as carried by both resources below.
+dashboard:
+  # Default of the dashboard's "Log stream selector" box: the Loki stream
+  # selector the usage panels query. Empty keeps the packaged default,
+  # {app_kubernetes_io_name="hickory-filter"}. Log collectors label container
+  # streams differently, so set the selector that matches the server's streams
+  # in your Loki, e.g. {service_name="hickory-filter"}.
+  logSelector: ""
+
 # The dashboard in dashboards/, for the Grafana operator.
 grafanaDashboard:
   enabled: false
